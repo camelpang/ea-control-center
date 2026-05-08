@@ -1,5 +1,5 @@
 #property strict
-#property version   "0.1.0"
+#property version   "0.2.0"
 #property description "EA Control Center connector for MT5"
 
 #include <Trade/Trade.mqh>
@@ -11,56 +11,22 @@ input int InpRequestTimeoutMs = 5000;
 input int InpHeartbeatIntervalSec = 10;
 input int InpSnapshotIntervalSec = 15;
 input int InpCommandPollIntervalSec = 5;
+input int InpTradeDeviationPoints = 20;
+input long InpMagicNumber = 20260509;
 input bool InpAllowTradingOnStart = true;
 
 CTrade g_trade;
 bool g_allow_trading = true;
+int g_heartbeat_interval_sec = 10;
+int g_snapshot_interval_sec = 15;
+int g_command_poll_interval_sec = 5;
 datetime g_last_heartbeat = 0;
 datetime g_last_snapshot = 0;
 datetime g_last_command_poll = 0;
 
-int OnInit()
+void LogMessage(string message)
 {
-   g_allow_trading = InpAllowTradingOnStart;
-   EventSetTimer(1);
-   Print("EA Control Connector initialized. ea_id=", InpEaId);
-   Print("Remember to add URL in MT5: Tools -> Options -> Expert Advisors -> Allow WebRequest for listed URL");
-   return(INIT_SUCCEEDED);
-}
-
-void OnDeinit(const int reason)
-{
-   EventKillTimer();
-}
-
-void OnTick()
-{
-   // Strategy trading logic can check g_allow_trading before opening new trades.
-   if(!g_allow_trading)
-      return;
-}
-
-void OnTimer()
-{
-   datetime now = TimeCurrent();
-
-   if(now - g_last_heartbeat >= InpHeartbeatIntervalSec)
-   {
-      SendHeartbeat();
-      g_last_heartbeat = now;
-   }
-
-   if(now - g_last_snapshot >= InpSnapshotIntervalSec)
-   {
-      SendSnapshot();
-      g_last_snapshot = now;
-   }
-
-   if(now - g_last_command_poll >= InpCommandPollIntervalSec)
-   {
-      PollAndExecuteCommands();
-      g_last_command_poll = now;
-   }
+   Print("[EAControlConnector] ", message);
 }
 
 string EscapeJson(string value)
@@ -72,13 +38,198 @@ string EscapeJson(string value)
    return value;
 }
 
-bool SendApiRequest(
-   string method,
-   string path,
-   string payload,
-   int &status_code,
-   string &response_body
-)
+string BoolToJson(bool value)
+{
+   return value ? "true" : "false";
+}
+
+int SkipWhitespace(string text, int pos)
+{
+   while(pos < StringLen(text))
+   {
+      ushort ch = (ushort)StringGetCharacter(text, pos);
+      if(ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n')
+         break;
+      pos++;
+   }
+   return pos;
+}
+
+bool ExtractJsonStringAt(string text, int start_quote, string &value, int &next_pos)
+{
+   if(start_quote < 0 || start_quote >= StringLen(text))
+      return false;
+   if((ushort)StringGetCharacter(text, start_quote) != '"')
+      return false;
+
+   value = "";
+   bool escaped = false;
+   int len = StringLen(text);
+   for(int i = start_quote + 1; i < len; i++)
+   {
+      ushort ch = (ushort)StringGetCharacter(text, i);
+      if(escaped)
+      {
+         if(ch == 'n')
+            value += "\n";
+         else if(ch == 'r')
+            value += "\r";
+         else if(ch == 't')
+            value += "\t";
+         else
+            value += StringSubstr(text, i, 1);
+         escaped = false;
+         continue;
+      }
+
+      if(ch == '\\')
+      {
+         escaped = true;
+         continue;
+      }
+
+      if(ch == '"')
+      {
+         next_pos = i + 1;
+         return true;
+      }
+
+      value += StringSubstr(text, i, 1);
+   }
+
+   return false;
+}
+
+bool ExtractJsonObjectAt(string text, int start_brace, string &object_text, int &next_pos)
+{
+   if(start_brace < 0 || start_brace >= StringLen(text))
+      return false;
+   if((ushort)StringGetCharacter(text, start_brace) != '{')
+      return false;
+
+   bool in_string = false;
+   bool escaped = false;
+   int depth = 0;
+   int len = StringLen(text);
+
+   for(int i = start_brace; i < len; i++)
+   {
+      ushort ch = (ushort)StringGetCharacter(text, i);
+      if(in_string)
+      {
+         if(escaped)
+         {
+            escaped = false;
+         }
+         else if(ch == '\\')
+         {
+            escaped = true;
+         }
+         else if(ch == '"')
+         {
+            in_string = false;
+         }
+         continue;
+      }
+
+      if(ch == '"')
+      {
+         in_string = true;
+         continue;
+      }
+
+      if(ch == '{')
+         depth++;
+      else if(ch == '}')
+      {
+         depth--;
+         if(depth == 0)
+         {
+            object_text = StringSubstr(text, start_brace, i - start_brace + 1);
+            next_pos = i + 1;
+            return true;
+         }
+      }
+   }
+
+   return false;
+}
+
+bool JsonGetString(string json, string key, string &value)
+{
+   string marker = "\"" + key + "\":\"";
+   int pos = StringFind(json, marker);
+   if(pos < 0)
+      return false;
+
+   int start_quote = pos + StringLen(marker) - 1;
+   int next_pos = 0;
+   return ExtractJsonStringAt(json, start_quote, value, next_pos);
+}
+
+bool JsonGetObject(string json, string key, string &value)
+{
+   string marker = "\"" + key + "\":";
+   int pos = StringFind(json, marker);
+   if(pos < 0)
+      return false;
+
+   int brace_pos = SkipWhitespace(json, pos + StringLen(marker));
+   int next_pos = 0;
+   return ExtractJsonObjectAt(json, brace_pos, value, next_pos);
+}
+
+bool JsonGetNumberText(string json, string key, string &value)
+{
+   string marker = "\"" + key + "\":";
+   int pos = StringFind(json, marker);
+   if(pos < 0)
+      return false;
+
+   int start = SkipWhitespace(json, pos + StringLen(marker));
+   int end = start;
+   while(end < StringLen(json))
+   {
+      ushort ch = (ushort)StringGetCharacter(json, end);
+      if(ch == ',' || ch == '}' || ch == ']' || ch == ' ' || ch == '\r' || ch == '\n' || ch == '\t')
+         break;
+      end++;
+   }
+
+   value = StringSubstr(json, start, end - start);
+   return StringLen(value) > 0;
+}
+
+bool JsonGetBool(string json, string key, bool &value)
+{
+   string text = "";
+   if(!JsonGetNumberText(json, key, text))
+      return false;
+
+   if(text == "true")
+   {
+      value = true;
+      return true;
+   }
+   if(text == "false")
+   {
+      value = false;
+      return true;
+   }
+   return false;
+}
+
+string BuildResultRaw(string command_type, string detail)
+{
+   string raw =
+      "{"
+      "\"command_type\":\"" + EscapeJson(command_type) + "\"," 
+      + "\"detail\":\"" + EscapeJson(detail) + "\""
+      + "}";
+   return raw;
+}
+
+bool SendApiRequest(string method, string path, string payload, int &status_code, string &response_body)
 {
    string url = InpApiBaseUrl + path;
    string headers = "Content-Type: application/json\r\nX-EA-Token: " + InpEaToken + "\r\n";
@@ -87,51 +238,74 @@ bool SendApiRequest(
    uchar result[];
    string result_headers = "";
 
-   StringToCharArray(payload, body, 0, WHOLE_ARRAY, CP_UTF8);
-   if(ArraySize(body) > 0 && body[ArraySize(body) - 1] == 0)
-      ArrayResize(body, ArraySize(body) - 1);
+   if(method == "GET")
+   {
+      ArrayResize(body, 0);
+   }
+   else
+   {
+      StringToCharArray(payload, body, 0, WHOLE_ARRAY, CP_UTF8);
+      if(ArraySize(body) > 0 && body[ArraySize(body) - 1] == 0)
+         ArrayResize(body, ArraySize(body) - 1);
+   }
 
    ResetLastError();
    status_code = WebRequest(method, url, headers, InpRequestTimeoutMs, body, result, result_headers);
    if(status_code == -1)
    {
       int err = GetLastError();
-      Print("WebRequest failed. path=", path, " error=", err);
       response_body = "";
+      LogMessage("WebRequest failed path=" + path + " error=" + IntegerToString(err));
       return false;
    }
 
    response_body = CharArrayToString(result, 0, WHOLE_ARRAY, CP_UTF8);
+   if(status_code < 200 || status_code >= 300)
+   {
+      LogMessage("HTTP " + IntegerToString(status_code) + " for " + path + " body=" + response_body);
+      return false;
+   }
+
    return true;
 }
 
-void SendHeartbeat()
+bool SendHeartbeat()
 {
-   string terminal_name = "MT5";
    string strategy_name = MQLInfoString(MQL_PROGRAM_NAME);
-   string version = MQLInfoString(MQL_PROGRAM_NAME) + "-0.1.0";
+   string version = MQLInfoString(MQL_PROGRAM_NAME) + "-0.2.0";
    string broker = AccountInfoString(ACCOUNT_COMPANY);
    string account = (string)AccountInfoInteger(ACCOUNT_LOGIN);
 
    string payload =
       "{"
-      "\"ea_id\":\"" + EscapeJson(InpEaId) + "\","
-      "\"account_number\":\"" + EscapeJson(account) + "\","
-      "\"broker\":\"" + EscapeJson(broker) + "\","
-      "\"terminal\":\"" + terminal_name + "\","
-      "\"strategy_name\":\"" + EscapeJson(strategy_name) + "\","
-      "\"version\":\"" + EscapeJson(version) + "\","
-      "\"status\":\"online\","
-      "\"allow_trading\":" + (g_allow_trading ? "true" : "false") +
-      "}";
+      "\"ea_id\":\"" + EscapeJson(InpEaId) + "\"," 
+      + "\"account_number\":\"" + EscapeJson(account) + "\"," 
+      + "\"broker\":\"" + EscapeJson(broker) + "\"," 
+      + "\"terminal\":\"MT5\"," 
+      + "\"strategy_name\":\"" + EscapeJson(strategy_name) + "\"," 
+      + "\"version\":\"" + EscapeJson(version) + "\"," 
+      + "\"status\":\"online\"," 
+      + "\"allow_trading\":" + BoolToJson(g_allow_trading)
+      + "}";
 
    int status = 0;
    string body = "";
    if(!SendApiRequest("POST", "/api/ea/heartbeat", payload, status, body))
-      return;
+      return false;
 
-   if(status < 200 || status >= 300)
-      Print("Heartbeat rejected. status=", status, " body=", body);
+   LogMessage("Heartbeat accepted for " + InpEaId);
+   return true;
+}
+
+string BuildPositionRawJson(ulong ticket, string symbol, long type)
+{
+   string raw =
+      "{"
+      "\"ticket\":\"" + (string)ticket + "\"," 
+      + "\"symbol\":\"" + EscapeJson(symbol) + "\"," 
+      + "\"position_type\":" + IntegerToString((int)type)
+      + "}";
+   return raw;
 }
 
 string BuildPositionsJson()
@@ -145,7 +319,6 @@ string BuildPositionsJson()
       ulong ticket = PositionGetTicket(i);
       if(ticket == 0)
          continue;
-
       if(!PositionSelectByTicket(ticket))
          continue;
 
@@ -158,19 +331,28 @@ string BuildPositionsJson()
       double sl = PositionGetDouble(POSITION_SL);
       double tp = PositionGetDouble(POSITION_TP);
       double profit = PositionGetDouble(POSITION_PROFIT);
+      double swap = PositionGetDouble(POSITION_SWAP);
+      double commission = PositionGetDouble(POSITION_COMMISSION);
+
+      int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+      if(digits < 0)
+         digits = _Digits;
 
       string item =
          "{"
-         "\"ticket\":\"" + (string)ticket + "\","
-         "\"symbol\":\"" + EscapeJson(symbol) + "\","
-         "\"side\":\"" + side + "\","
-         "\"volume\":" + DoubleToString(volume, 2) + ","
-         "\"open_price\":" + DoubleToString(open_price, _Digits) + ","
-         "\"current_price\":" + DoubleToString(current_price, _Digits) + ","
-         "\"sl\":" + DoubleToString(sl, _Digits) + ","
-         "\"tp\":" + DoubleToString(tp, _Digits) + ","
-         "\"profit\":" + DoubleToString(profit, 2) +
-         "}";
+         "\"ticket\":\"" + (string)ticket + "\"," 
+         + "\"symbol\":\"" + EscapeJson(symbol) + "\"," 
+         + "\"side\":\"" + side + "\"," 
+         + "\"volume\":" + DoubleToString(volume, 2) + ","
+         + "\"open_price\":" + DoubleToString(open_price, digits) + ","
+         + "\"current_price\":" + DoubleToString(current_price, digits) + ","
+         + "\"sl\":" + DoubleToString(sl, digits) + ","
+         + "\"tp\":" + DoubleToString(tp, digits) + ","
+         + "\"profit\":" + DoubleToString(profit, 2) + ","
+         + "\"swap\":" + DoubleToString(swap, 2) + ","
+         + "\"commission\":" + DoubleToString(commission, 2) + ","
+         + "\"raw\":" + BuildPositionRawJson(ticket, symbol, type)
+         + "}";
 
       if(!first)
          result += ",";
@@ -182,7 +364,7 @@ string BuildPositionsJson()
    return result;
 }
 
-void SendSnapshot()
+bool SendSnapshot()
 {
    string account = (string)AccountInfoInteger(ACCOUNT_LOGIN);
    string currency = AccountInfoString(ACCOUNT_CURRENCY);
@@ -193,39 +375,44 @@ void SendSnapshot()
    double margin_level = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
    double profit = AccountInfoDouble(ACCOUNT_PROFIT);
 
+   string raw =
+      "{"
+      "\"company\":\"" + EscapeJson(AccountInfoString(ACCOUNT_COMPANY)) + "\"," 
+      + "\"server\":\"" + EscapeJson(AccountInfoString(ACCOUNT_SERVER)) + "\"," 
+      + "\"leverage\":" + IntegerToString((int)AccountInfoInteger(ACCOUNT_LEVERAGE))
+      + "}";
+
    string payload =
       "{"
-      "\"ea_id\":\"" + EscapeJson(InpEaId) + "\","
-      "\"account_number\":\"" + EscapeJson(account) + "\","
-      "\"currency\":\"" + EscapeJson(currency) + "\","
-      "\"balance\":" + DoubleToString(balance, 2) + ","
-      "\"equity\":" + DoubleToString(equity, 2) + ","
-      "\"margin\":" + DoubleToString(margin, 2) + ","
-      "\"free_margin\":" + DoubleToString(free_margin, 2) + ","
-      "\"margin_level\":" + DoubleToString(margin_level, 2) + ","
-      "\"profit\":" + DoubleToString(profit, 2) + ","
-      "\"positions\":" + BuildPositionsJson() +
-      "}";
+      "\"ea_id\":\"" + EscapeJson(InpEaId) + "\"," 
+      + "\"account_number\":\"" + EscapeJson(account) + "\"," 
+      + "\"currency\":\"" + EscapeJson(currency) + "\"," 
+      + "\"balance\":" + DoubleToString(balance, 2) + ","
+      + "\"equity\":" + DoubleToString(equity, 2) + ","
+      + "\"margin\":" + DoubleToString(margin, 2) + ","
+      + "\"free_margin\":" + DoubleToString(free_margin, 2) + ","
+      + "\"margin_level\":" + DoubleToString(margin_level, 2) + ","
+      + "\"profit\":" + DoubleToString(profit, 2) + ","
+      + "\"positions\":" + BuildPositionsJson() + ","
+      + "\"raw\":" + raw
+      + "}";
 
    int status = 0;
    string body = "";
    if(!SendApiRequest("POST", "/api/ea/snapshot", payload, status, body))
-      return;
+      return false;
 
-   if(status < 200 || status >= 300)
-      Print("Snapshot rejected. status=", status, " body=", body);
+   LogMessage("Snapshot accepted positions=" + IntegerToString(PositionsTotal()));
+   return true;
 }
 
-bool ExtractNextCommand(string json, int &offset, int &command_id, string &command_type)
+bool ExtractNextCommand(string json, int &offset, int &command_id, string &command_type, string &payload_json)
 {
    int id_key = StringFind(json, "\"id\":", offset);
    if(id_key < 0)
       return false;
 
-   int id_start = id_key + 5;
-   while(id_start < StringLen(json) && (StringGetCharacter(json, id_start) == ' ' || StringGetCharacter(json, id_start) == '\t'))
-      id_start++;
-
+   int id_start = SkipWhitespace(json, id_key + 5);
    int id_end = id_start;
    while(id_end < StringLen(json))
    {
@@ -238,22 +425,45 @@ bool ExtractNextCommand(string json, int &offset, int &command_id, string &comma
    string id_text = StringSubstr(json, id_start, id_end - id_start);
    command_id = (int)StringToInteger(id_text);
 
-   int type_key = StringFind(json, "\"command_type\":\"", id_end);
-   if(type_key < 0)
-      return false;
-   int type_start = type_key + 16;
-   int type_end = StringFind(json, "\"", type_start);
-   if(type_end < 0)
+   string command_slice = StringSubstr(json, id_key);
+   if(!JsonGetString(command_slice, "command_type", command_type))
       return false;
 
-   command_type = StringSubstr(json, type_start, type_end - type_start);
-   offset = type_end + 1;
+   if(!JsonGetObject(command_slice, "payload", payload_json))
+      payload_json = "{}";
+
+   offset = id_end;
    return true;
 }
 
-bool CloseAllPositions()
+bool ClosePositionByTicketText(string ticket_text, string &message)
+{
+   ulong ticket = (ulong)StringToInteger(ticket_text);
+   if(ticket == 0)
+   {
+      message = "invalid ticket";
+      return false;
+   }
+   if(!PositionSelectByTicket(ticket))
+   {
+      message = "ticket not found";
+      return false;
+   }
+   if(!g_trade.PositionClose(ticket))
+   {
+      message = "close failed retcode=" + IntegerToString((int)g_trade.ResultRetcode());
+      return false;
+   }
+   message = "ticket closed";
+   return true;
+}
+
+bool CloseAllPositions(string &message)
 {
    bool ok = true;
+   int closed = 0;
+   int failed = 0;
+
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
@@ -261,80 +471,348 @@ bool CloseAllPositions()
          continue;
       if(!PositionSelectByTicket(ticket))
          continue;
-      if(!g_trade.PositionClose(ticket))
+      if(g_trade.PositionClose(ticket))
       {
+         closed++;
+      }
+      else
+      {
+         failed++;
          ok = false;
-         Print("Failed to close ticket=", ticket, " retcode=", g_trade.ResultRetcode());
       }
    }
+
+   message = "closed=" + IntegerToString(closed) + ", failed=" + IntegerToString(failed);
    return ok;
 }
 
-void SubmitCommandResult(int command_id, string status_text, string message)
+bool ClosePositionsBySymbol(string symbol, string &message)
+{
+   if(symbol == "")
+   {
+      message = "missing symbol";
+      return false;
+   }
+
+   bool ok = true;
+   int closed = 0;
+   int failed = 0;
+   bool found = false;
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0)
+         continue;
+      if(!PositionSelectByTicket(ticket))
+         continue;
+      if(PositionGetString(POSITION_SYMBOL) != symbol)
+         continue;
+
+      found = true;
+      if(g_trade.PositionClose(ticket))
+      {
+         closed++;
+      }
+      else
+      {
+         failed++;
+         ok = false;
+      }
+   }
+
+   if(!found)
+   {
+      message = "no open positions for symbol";
+      return false;
+   }
+
+   message = "symbol=" + symbol + ", closed=" + IntegerToString(closed) + ", failed=" + IntegerToString(failed);
+   return ok;
+}
+
+bool OpenMarketOrder(string payload_json, string &message)
+{
+   string symbol = "";
+   string side = "";
+   string volume_text = "";
+   string comment = "EAControlConnector";
+   string sl_text = "";
+   string tp_text = "";
+
+   if(!JsonGetString(payload_json, "symbol", symbol))
+   {
+      message = "missing symbol";
+      return false;
+   }
+   if(!JsonGetString(payload_json, "side", side))
+   {
+      message = "missing side";
+      return false;
+   }
+   if(!JsonGetNumberText(payload_json, "volume", volume_text))
+   {
+      message = "missing volume";
+      return false;
+   }
+   JsonGetString(payload_json, "comment", comment);
+   JsonGetNumberText(payload_json, "sl", sl_text);
+   JsonGetNumberText(payload_json, "tp", tp_text);
+
+   if(!SymbolSelect(symbol, true))
+   {
+      message = "failed to select symbol";
+      return false;
+   }
+
+   double volume = StringToDouble(volume_text);
+   if(volume <= 0)
+   {
+      message = "invalid volume";
+      return false;
+   }
+
+   int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+   double sl = (sl_text == "" ? 0.0 : NormalizeDouble(StringToDouble(sl_text), digits));
+   double tp = (tp_text == "" ? 0.0 : NormalizeDouble(StringToDouble(tp_text), digits));
+
+   g_trade.SetDeviationInPoints(InpTradeDeviationPoints);
+   g_trade.SetExpertMagicNumber(InpMagicNumber);
+
+   bool result = false;
+   if(side == "buy")
+      result = g_trade.Buy(volume, symbol, 0.0, sl, tp, comment);
+   else if(side == "sell")
+      result = g_trade.Sell(volume, symbol, 0.0, sl, tp, comment);
+   else
+   {
+      message = "unsupported side";
+      return false;
+   }
+
+   if(!result)
+   {
+      message = "open failed retcode=" + IntegerToString((int)g_trade.ResultRetcode());
+      return false;
+   }
+
+   message = "order placed symbol=" + symbol + ", side=" + side + ", volume=" + DoubleToString(volume, 2);
+   return true;
+}
+
+bool UpdateRuntimeParams(string payload_json, string &message)
+{
+   bool changed = false;
+   bool bool_value = false;
+   string number_text = "";
+   string summary = "";
+
+   if(JsonGetBool(payload_json, "allow_trading", bool_value))
+   {
+      g_allow_trading = bool_value;
+      summary += "allow_trading=" + BoolToJson(bool_value) + "; ";
+      changed = true;
+   }
+
+   if(JsonGetNumberText(payload_json, "heartbeat_interval_sec", number_text))
+   {
+      int value = (int)StringToInteger(number_text);
+      if(value > 0)
+      {
+         g_heartbeat_interval_sec = value;
+         summary += "heartbeat_interval_sec=" + IntegerToString(value) + "; ";
+         changed = true;
+      }
+   }
+
+   if(JsonGetNumberText(payload_json, "snapshot_interval_sec", number_text))
+   {
+      int value = (int)StringToInteger(number_text);
+      if(value > 0)
+      {
+         g_snapshot_interval_sec = value;
+         summary += "snapshot_interval_sec=" + IntegerToString(value) + "; ";
+         changed = true;
+      }
+   }
+
+   if(JsonGetNumberText(payload_json, "command_poll_interval_sec", number_text))
+   {
+      int value = (int)StringToInteger(number_text);
+      if(value > 0)
+      {
+         g_command_poll_interval_sec = value;
+         summary += "command_poll_interval_sec=" + IntegerToString(value) + "; ";
+         changed = true;
+      }
+   }
+
+   if(!changed)
+   {
+      message = "no supported params in payload";
+      return false;
+   }
+
+   message = summary;
+   return true;
+}
+
+bool SubmitCommandResult(int command_id, string status_text, string message, string raw_json)
 {
    string payload =
       "{"
-      "\"status\":\"" + status_text + "\","
-      "\"message\":\"" + EscapeJson(message) + "\""
-      "}";
+      "\"status\":\"" + status_text + "\"," 
+      + "\"message\":\"" + EscapeJson(message) + "\"";
+
+   if(raw_json != "")
+      payload += ",\"raw\":" + raw_json;
+
+   payload += "}";
 
    int status = 0;
    string body = "";
    string path = "/api/ea/commands/" + (string)command_id + "/result";
    if(!SendApiRequest("POST", path, payload, status, body))
-      return;
+      return false;
 
-   if(status < 200 || status >= 300)
-      Print("Submit result failed. command_id=", command_id, " status=", status, " body=", body);
+   return true;
 }
 
-void ExecuteCommand(int command_id, string command_type)
+void ExecuteCommand(int command_id, string command_type, string payload_json)
 {
-   bool success = true;
-   string msg = "executed";
+   string executing_message = "command started";
+   SubmitCommandResult(command_id, "executing", executing_message, BuildResultRaw(command_type, executing_message));
+
+   bool success = false;
+   string message = "unsupported command_type";
 
    if(command_type == "pause_trading")
    {
       g_allow_trading = false;
-      msg = "trading paused";
+      success = true;
+      message = "trading paused";
    }
    else if(command_type == "resume_trading")
    {
       g_allow_trading = true;
-      msg = "trading resumed";
+      success = true;
+      message = "trading resumed";
    }
    else if(command_type == "close_all")
    {
-      success = CloseAllPositions();
-      msg = (success ? "all positions closed" : "close_all partially failed");
+      success = CloseAllPositions(message);
+   }
+   else if(command_type == "close_symbol")
+   {
+      string symbol = "";
+      if(JsonGetString(payload_json, "symbol", symbol))
+         success = ClosePositionsBySymbol(symbol, message);
+      else
+         message = "missing symbol";
+   }
+   else if(command_type == "close_ticket")
+   {
+      string ticket = "";
+      if(JsonGetString(payload_json, "ticket", ticket) || JsonGetNumberText(payload_json, "ticket", ticket))
+         success = ClosePositionByTicketText(ticket, message);
+      else
+         message = "missing ticket";
+   }
+   else if(command_type == "open_order")
+   {
+      success = OpenMarketOrder(payload_json, message);
+   }
+   else if(command_type == "update_params")
+   {
+      success = UpdateRuntimeParams(payload_json, message);
    }
    else
    {
-      // For unsupported commands, return failed for now.
-      success = false;
-      msg = "unsupported command_type: " + command_type;
+      message = "unsupported command_type: " + command_type;
    }
 
-   SubmitCommandResult(command_id, (success ? "success" : "failed"), msg);
+   string final_status = success ? "success" : "failed";
+   string raw = BuildResultRaw(command_type, message);
+   if(!SubmitCommandResult(command_id, final_status, message, raw))
+      LogMessage("Failed to submit result for command_id=" + IntegerToString(command_id));
+
+   LogMessage("Command " + IntegerToString(command_id) + " " + command_type + " -> " + final_status + " (" + message + ")");
 }
 
-void PollAndExecuteCommands()
+bool PollAndExecuteCommands()
 {
    int status = 0;
    string body = "";
    string path = "/api/ea/commands?ea_id=" + InpEaId;
 
    if(!SendApiRequest("GET", path, "", status, body))
-      return;
-   if(status < 200 || status >= 300)
-   {
-      Print("Poll commands failed. status=", status, " body=", body);
-      return;
-   }
+      return false;
 
    int offset = 0;
    int cmd_id = 0;
    string cmd_type = "";
-   while(ExtractNextCommand(body, offset, cmd_id, cmd_type))
-      ExecuteCommand(cmd_id, cmd_type);
+   string payload_json = "{}";
+   int executed = 0;
+
+   while(ExtractNextCommand(body, offset, cmd_id, cmd_type, payload_json))
+   {
+      ExecuteCommand(cmd_id, cmd_type, payload_json);
+      executed++;
+   }
+
+   if(executed > 0)
+      LogMessage("Processed commands=" + IntegerToString(executed));
+   return true;
+}
+
+int OnInit()
+{
+   g_allow_trading = InpAllowTradingOnStart;
+   g_heartbeat_interval_sec = MathMax(1, InpHeartbeatIntervalSec);
+   g_snapshot_interval_sec = MathMax(1, InpSnapshotIntervalSec);
+   g_command_poll_interval_sec = MathMax(1, InpCommandPollIntervalSec);
+
+   g_trade.SetDeviationInPoints(InpTradeDeviationPoints);
+   g_trade.SetExpertMagicNumber(InpMagicNumber);
+
+   EventSetTimer(1);
+   LogMessage("Initialized ea_id=" + InpEaId);
+   LogMessage("Allow WebRequest for " + InpApiBaseUrl + " in MT5 terminal settings");
+   return(INIT_SUCCEEDED);
+}
+
+void OnDeinit(const int reason)
+{
+   EventKillTimer();
+   LogMessage("Stopped reason=" + IntegerToString(reason));
+}
+
+void OnTick()
+{
+   // Strategy trading logic can check g_allow_trading before opening new trades.
+   if(!g_allow_trading)
+      return;
+}
+
+void OnTimer()
+{
+   datetime now = TimeCurrent();
+
+   if(now - g_last_heartbeat >= g_heartbeat_interval_sec)
+   {
+      if(SendHeartbeat())
+         g_last_heartbeat = now;
+   }
+
+   if(now - g_last_snapshot >= g_snapshot_interval_sec)
+   {
+      if(SendSnapshot())
+         g_last_snapshot = now;
+   }
+
+   if(now - g_last_command_poll >= g_command_poll_interval_sec)
+   {
+      if(PollAndExecuteCommands())
+         g_last_command_poll = now;
+   }
 }

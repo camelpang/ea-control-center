@@ -1,6 +1,6 @@
-# MT5 EA Connector (MVP)
+# MT5 EA Connector
 
-This folder contains a minimal MT5 Expert Advisor connector for the EA Control Center backend.
+This folder contains an MT5 Expert Advisor connector for the EA Control Center backend.
 
 ## File
 
@@ -13,13 +13,59 @@ This folder contains a minimal MT5 Expert Advisor connector for the EA Control C
 - Polls commands from `GET /api/ea/commands?ea_id=...`
 - Submits execution result to `POST /api/ea/commands/{command_id}/result`
 
-## Supported Commands In This MVP
+## Supported Commands
 
 - `pause_trading`
 - `resume_trading`
 - `close_all`
+- `close_symbol`
+- `close_ticket`
+- `open_order`
+- `update_params`
 
-Other command types are returned as `failed` with message `unsupported command_type`.
+Unsupported command types are returned as `failed` with message `unsupported command_type: ...`.
+
+## Command Payload Examples
+
+`close_symbol`
+
+```json
+{
+  "symbol": "EURUSD"
+}
+```
+
+`close_ticket`
+
+```json
+{
+  "ticket": "123456789"
+}
+```
+
+`open_order`
+
+```json
+{
+  "symbol": "EURUSD",
+  "side": "buy",
+  "volume": 0.1,
+  "sl": 1.08,
+  "tp": 1.09,
+  "comment": "opened-from-admin"
+}
+```
+
+`update_params`
+
+```json
+{
+  "allow_trading": true,
+  "heartbeat_interval_sec": 10,
+  "snapshot_interval_sec": 15,
+  "command_poll_interval_sec": 5
+}
+```
 
 ## MT5 Setup
 
@@ -34,9 +80,13 @@ Other command types are returned as `failed` with message `unsupported command_t
    - `InpApiBaseUrl`
    - `InpEaToken`
    - `InpEaId`
+   - `InpTradeDeviationPoints`
+   - `InpMagicNumber`
 
 ## Notes
 
-- This is a connector skeleton for integration testing, not a full strategy EA.
-- `OnTick` currently only gates new trading by `g_allow_trading`.
-- Extend `ExecuteCommand()` to support additional command types (`close_symbol`, `close_ticket`, `open_order`, `update_params`) as needed.
+- `OnTick()` still only gates new trading by `g_allow_trading`; it does not contain your actual strategy logic yet.
+- The connector now sends `executing` before the final `success` or `failed` result, which makes backend command logs easier to follow.
+- Snapshot uploads include `swap`, `commission`, and extra `raw` metadata for easier troubleshooting.
+- `update_params` updates runtime behavior only for the currently running EA instance; it does not permanently rewrite MT5 input parameters.
+- This chat environment cannot run MetaEditor, so the code was prepared for compilation and integration, but not compiled inside MT5 here.
