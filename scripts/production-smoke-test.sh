@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-BASE_URL="${1:-http://127.0.0.1:8000}"
+BASE_URL="${1:-${BASE_URL:-http://127.0.0.1:8000}}"
 ADMIN_TOKEN="${ADMIN_API_TOKEN:-}"
 WRITE_SMOKE="${WRITE_SMOKE:-0}"
 EA_TOKEN="${EA_API_TOKEN:-}"
