@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EA 详情 - EA 中央控制系统</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --panel: #121a2b;
+      --panel-alt: #172036;
+      --border: #26324d;
+      --text: #e5ecff;
+      --muted: #94a3c7;
+      --accent: #60a5fa;
+      --ok: #16a34a;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 22px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero-panel {
+      background: linear-gradient(135deg, rgba(18, 26, 43, 0.98), rgba(17, 32, 58, 0.9));
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    h1, h2, h3 { margin: 0; }
+    h1 { font-size: 24px; }
+    h2 { font-size: 18px; }
+    h3 { font-size: 16px; }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .input,
+    .select {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      background: #334155;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .button.primary {
+      background: var(--accent);
+      color: #081120;
+      font-weight: bold;
+    }
+
+    .button.warn {
+      background: var(--warn);
+      color: #111827;
+      font-weight: bold;
+    }
+
+    .button.ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+    }
+
+    .button.danger {
+      background: var(--bad);
+      color: #fff;
+      font-weight: bold;
+    }
+
+    .message {
+      display: none;
+      margin-top: 10px;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .message.show { display: block; }
+    .message.ok { background: rgba(22, 163, 74, 0.18); color: #bbf7d0; }
+    .message.error { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
+    .message.info { background: rgba(96, 165, 250, 0.18); color: #bfdbfe; }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .summary-item {
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+    }
+
+    .summary-item .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .summary-item .value {
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .permission-note,
+    .safety-note,
+    .rule-note {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(23, 32, 54, 0.52);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .safety-note strong {
+      color: var(--text);
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 0.42fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .primary-stack {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .side-panel {
+      position: sticky;
+      top: 16px;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #18233c;
+      z-index: 1;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 72px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge.online, .badge.success {
+      background: rgba(22, 163, 74, 0.2);
+      color: #86efac;
+    }
+
+    .badge.offline, .badge.failed, .badge.cancelled, .badge.timeout {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+
+    .badge.pending, .badge.received, .badge.executing {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+    }
+
+    .badge.paused {
+      background: rgba(59, 130, 246, 0.18);
+      color: #bfdbfe;
+    }
+
+    .badge.normal {
+      background: rgba(148, 163, 184, 0.2);
+      color: #cbd5e1;
+    }
+
+    .empty {
+      padding: 24px;
+      color: var(--muted);
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      background: rgba(23, 32, 54, 0.35);
+    }
+
+    pre,
+    code {
+      font-family: Consolas, monospace;
+      font-size: 12px;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-width: 360px;
+    }
+
+    .side-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .side-item {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(23, 32, 54, 0.65);
+    }
+
+    .side-item-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .side-item-title {
+      font-weight: 800;
+    }
+
+    .side-item-meta {
+      display: grid;
+      gap: 4px;
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .action-section {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .action-section h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+
+    .op-fields {
+      display: none;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .op-fields.show {
+      display: grid;
+    }
+
+    .risk-note {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 12px;
+      background: rgba(245, 158, 11, 0.1);
+      color: #fde68a;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .mini-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .mini-item {
+      padding: 10px;
+      border: 1px solid rgba(245, 158, 11, 0.32);
+      border-radius: 10px;
+      background: rgba(245, 158, 11, 0.08);
+      font-size: 13px;
+    }
+
+    .mini-item strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(2, 6, 23, 0.72);
+      backdrop-filter: blur(6px);
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+    }
+
+    .confirm-modal {
+      width: min(560px, 100%);
+      border: 1px solid rgba(96, 165, 250, 0.42);
+      border-radius: 18px;
+      background: #0f172a;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+      padding: 18px;
+    }
+
+    .confirm-modal h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .confirm-box {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(23, 32, 54, 0.7);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .confirm-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .token-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    @media (max-width: 1100px) {
+      .summary-grid,
+      .detail-grid,
+      .token-row {
+        grid-template-columns: 1fr;
+      }
+
+      .side-panel {
+        position: static;
+      }
+
+      .action-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="panel hero-panel">
+      <div class="section-title">
+        <div>
+          <h1 id="pageTitle">EA 详情</h1>
+          <div id="pageMeta" class="meta">通过 URL 参数 <code>?ea=EA_ID</code> 打开某个 EA 的详情。</div>
+        </div>
+        <div class="meta">
+          <a href="/admin">中央控制系统</a> ·
+          <a href="/dashboard">监控大屏</a> ·
+          <a href="/manual-trades">人工建仓管理</a> ·
+          <a href="/commands">命令历史</a>
+        </div>
+      </div>
+      <div class="token-row">
+        <div>
+          <label for="adminToken" class="meta">静态 X-Admin-Token（JWT 会优先使用）</label>
+          <input id="adminToken" class="input" type="password" placeholder="可留空，优先使用已登录 JWT" />
+        </div>
+        <button id="saveTokenBtn" class="button ghost" type="button">保存 Token</button>
+        <button id="refreshBtn" class="button primary" type="button">刷新详情</button>
+      </div>
+      <div id="pageMessage" class="message"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <div>
+          <h2>状态轮廓</h2>
+          <div class="meta">单个 EA 的基础状态、账户轮廓和最近数据。</div>
+        </div>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="label">状态</div>
+          <div id="summaryStatus" class="value">-</div>
+        </div>
+        <div class="summary-item">
+          <div class="label">交易许可</div>
+          <div id="summaryAllowTrading" class="value">-</div>
+        </div>
+        <div class="summary-item">
+          <div class="label">账号 / Broker</div>
+          <div id="summaryAccount" class="value">-</div>
+        </div>
+        <div class="summary-item">
+          <div class="label">余额 / 净值</div>
+          <div id="summaryBalance" class="value">-</div>
+        </div>
+        <div class="summary-item">
+          <div class="label">持仓数</div>
+          <div id="summaryPositions" class="value">-</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="detail-grid">
+      <div class="primary-stack">
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <h2>持仓</h2>
+              <div class="meta">当前 EA 的实时持仓列表。</div>
+            </div>
+            <span id="positionsCount" class="meta">0 条</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>订单号</th>
+                  <th>品种</th>
+                  <th>方向</th>
+                  <th>手数</th>
+                  <th>开仓价</th>
+                  <th>当前价</th>
+                  <th>SL / TP</th>
+                  <th>浮盈亏</th>
+                  <th>更新时间</th>
+                </tr>
+              </thead>
+              <tbody id="positionsTableBody">
+                <tr><td colspan="9" class="meta">暂无持仓数据。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <h2>快照</h2>
+              <div class="meta">最近账户资金快照，用于观察余额、净值和保证金变化。</div>
+            </div>
+            <span id="snapshotsCount" class="meta">0 条</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>创建时间</th>
+                  <th>账号</th>
+                  <th>币种</th>
+                  <th>余额</th>
+                  <th>净值</th>
+                  <th>占用保证金</th>
+                  <th>可用保证金</th>
+                  <th>保证金比例</th>
+                  <th>浮盈亏</th>
+                </tr>
+              </thead>
+              <tbody id="snapshotsTableBody">
+                <tr><td colspan="9" class="meta">暂无快照数据。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="side-panel side-stack">
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <h2>EA 操作</h2>
+              <div class="meta">暂停/恢复只控制自动策略交易；人工建仓和平仓从下方交易操作发起。</div>
+            </div>
+          </div>
+          <div class="summary-item">
+            <div class="label">未完成命令</div>
+            <div id="activeCommandCount" class="value">0</div>
+          </div>
+          <div id="activeCommandList" class="mini-list"></div>
+          <div id="permissionNote" class="permission-note">权限信息加载中。普通用户只有在被分配且可交易时才能下发命令。</div>
+          <div class="toolbar" style="margin-top: 12px;">
+            <input id="actionRequestedBy" class="input" type="text" value="ea-detail-ui" placeholder="操作人" />
+            <input id="actionReason" class="input" type="text" placeholder="原因 / 备注（可选）" />
+          </div>
+          <div class="action-grid">
+            <button class="button warn" type="button" data-safe-command="pause_trading">暂停 EA</button>
+            <button class="button primary" type="button" data-safe-command="resume_trading">恢复自动</button>
+          </div>
+          <div class="action-section">
+            <h3>交易操作</h3>
+            <select id="tradeOperation" class="select">
+              <option value="open_market">市价建仓</option>
+              <option value="open_pending">挂单建仓</option>
+              <option value="close_all">全部平仓</option>
+              <option value="close_symbol">按品种平仓</option>
+              <option value="close_ticket">按订单号平仓</option>
+              <option value="cancel_order">取消挂单</option>
+            </select>
+            <div id="tradeSafetyNote" class="safety-note">交易安全限制加载中。</div>
+            <div class="op-fields" data-op-fields="open_market open_pending close_symbol">
+              <input id="opSymbol" class="input" type="text" value="XAUUSD" placeholder="交易品种，如 XAUUSD；平仓留空则用当前持仓品种" />
+            </div>
+            <div class="op-fields" data-op-fields="open_market open_pending">
+              <select id="opSide" class="select">
+                <option value="buy">买入</option>
+                <option value="sell">卖出</option>
+              </select>
+              <input id="opVolume" class="input" type="number" min="0" step="0.01" placeholder="手数，如 0.10" />
+              <input id="opSl" class="input" type="number" step="0.01" placeholder="止损价（可选）" />
+              <input id="opTp" class="input" type="number" step="0.01" placeholder="止盈价（可选）" />
+              <input id="opComment" class="input" type="text" placeholder="订单备注（可选）" />
+            </div>
+            <div class="op-fields" data-op-fields="open_pending">
+              <select id="opOrderType" class="select">
+                <option value="buy_limit">Buy Limit</option>
+                <option value="sell_limit">Sell Limit</option>
+                <option value="buy_stop">Buy Stop</option>
+                <option value="sell_stop">Sell Stop</option>
+              </select>
+              <input id="opPrice" class="input" type="number" step="0.01" placeholder="挂单价格" />
+            </div>
+            <div class="op-fields" data-op-fields="close_ticket cancel_order">
+              <input id="opTicket" class="input" type="text" placeholder="订单号 / 挂单 ticket；留空则用当前持仓第一条 ticket" />
+            </div>
+            <div class="op-fields" data-op-fields="close_all">
+              <input id="opSlippage" class="input" type="number" min="0" step="1" placeholder="最大滑点（点，可选）" />
+            </div>
+            <button id="sendTradeCommandBtn" class="button danger" type="button" style="width: 100%; margin-top: 10px;">确认交易操作</button>
+          </div>
+          <div class="rule-note">人工管理规则：市价建仓 / 挂单建仓会自动带上人工交易标记；暂停/恢复只控制自动策略交易；恢复自动可作为退出人工干预流程的确认动作。</div>
+          <div id="actionRiskNote" class="risk-note">加载后显示当前 EA 的操作风险。</div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <h2>最近命令</h2>
+              <div class="meta">该 EA 最近 8 条命令状态。</div>
+            </div>
+            <span id="commandsCount" class="meta">0 条</span>
+          </div>
+          <div id="commandsList" class="side-list">
+            <div class="empty">暂无命令记录。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="confirmModal" class="modal-backdrop" aria-hidden="true">
+    <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <h2 id="confirmTitle">确认下发操作</h2>
+      <div id="confirmSummary" class="meta"></div>
+      <div id="confirmDetails" class="confirm-box"></div>
+      <div id="confirmWarnings" class="confirm-box"></div>
+      <div class="confirm-actions">
+        <button id="confirmCancelBtn" class="button ghost" type="button">取消</button>
+        <button id="confirmSendBtn" class="button danger" type="button">确认发送</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      eaId: new URLSearchParams(window.location.search).get("ea") || "",
+      ea: null,
+      positions: [],
+      snapshots: [],
+      commands: [],
+      safetyConfig: null,
+      myAssignments: []
+    };
+
+    const elements = {
+      adminToken: document.getElementById("adminToken"),
+      pageTitle: document.getElementById("pageTitle"),
+      pageMeta: document.getElementById("pageMeta"),
+      pageMessage: document.getElementById("pageMessage"),
+      summaryStatus: document.getElementById("summaryStatus"),
+      summaryAllowTrading: document.getElementById("summaryAllowTrading"),
+      summaryAccount: document.getElementById("summaryAccount"),
+      summaryBalance: document.getElementById("summaryBalance"),
+      summaryPositions: document.getElementById("summaryPositions"),
+      positionsCount: document.getElementById("positionsCount"),
+      positionsTableBody: document.getElementById("positionsTableBody"),
+      snapshotsCount: document.getElementById("snapshotsCount"),
+      snapshotsTableBody: document.getElementById("snapshotsTableBody"),
+      commandsCount: document.getElementById("commandsCount"),
+      commandsList: document.getElementById("commandsList"),
+      activeCommandCount: document.getElementById("activeCommandCount"),
+      activeCommandList: document.getElementById("activeCommandList"),
+      permissionNote: document.getElementById("permissionNote"),
+      actionRequestedBy: document.getElementById("actionRequestedBy"),
+      actionReason: document.getElementById("actionReason"),
+      tradeOperation: document.getElementById("tradeOperation"),
+      tradeSafetyNote: document.getElementById("tradeSafetyNote"),
+      sendTradeCommandBtn: document.getElementById("sendTradeCommandBtn"),
+      actionRiskNote: document.getElementById("actionRiskNote"),
+      confirmModal: document.getElementById("confirmModal"),
+      confirmTitle: document.getElementById("confirmTitle"),
+      confirmSummary: document.getElementById("confirmSummary"),
+      confirmDetails: document.getElementById("confirmDetails"),
+      confirmWarnings: document.getElementById("confirmWarnings"),
+      confirmCancelBtn: document.getElementById("confirmCancelBtn"),
+      confirmSendBtn: document.getElementById("confirmSendBtn")
+    };
+
+    let pendingConfirmResolve = null;
+    let principal = null;
+
+    function operationButtons() {
+      return [
+        ...Array.from(document.querySelectorAll("[data-safe-command]")),
+        elements.sendTradeCommandBtn,
+      ].filter(Boolean);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    }
+
+    function parseDate(value) {
+      if (!value) return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function formatDuration(ms) {
+      if (!Number.isFinite(ms) || ms < 0) return "-";
+      const totalSeconds = Math.round(ms / 1000);
+      if (totalSeconds < 60) return `${totalSeconds} 秒`;
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      if (minutes < 60) return seconds ? `${minutes} 分 ${seconds} 秒` : `${minutes} 分`;
+      const hours = Math.floor(minutes / 60);
+      const restMinutes = minutes % 60;
+      return restMinutes ? `${hours} 小时 ${restMinutes} 分` : `${hours} 小时`;
+    }
+
+    function commandDuration(command) {
+      const started = parseDate(command.created_at);
+      if (!started) return "-";
+      const ended = parseDate(command.completed_at) || parseDate(command.updated_at);
+      if (!ended) return "-";
+      return formatDuration(ended.getTime() - started.getTime());
+    }
+
+    function formatNumber(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      const n = Number(value);
+      return Number.isFinite(n)
+        ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : String(value);
+    }
+
+    function getStoredJwt() {
+      return (localStorage.getItem("ea-admin-jwt") || "").trim();
+    }
+
+    function getToken() {
+      return elements.adminToken.value.trim();
+    }
+
+    function showMessage(text, type = "info") {
+      elements.pageMessage.textContent = text;
+      elements.pageMessage.className = `message show ${type}`;
+    }
+
+    function clearMessage() {
+      elements.pageMessage.className = "message";
+      elements.pageMessage.textContent = "";
+    }
+
+    function apiErrorMessage(text, statusCode) {
+      if (!text) return `请求失败：${statusCode}`;
+      try {
+        const parsed = JSON.parse(text);
+        const detail = parsed.detail;
+        if (typeof detail === "string") return detail;
+        if (Array.isArray(detail)) {
+          return detail.map((item) => {
+            const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+            return [location, item.msg].filter(Boolean).join("：");
+          }).join("；");
+        }
+        if (detail) return JSON.stringify(detail);
+      } catch {
+        // Fall through to raw text for non-JSON responses.
+      }
+      return text;
+    }
+
+    async function api(path, options = {}) {
+      const jwt = getStoredJwt();
+      const legacy = getToken();
+      if (!jwt && !legacy) {
+        throw new Error("请先在中央控制系统登录，或在本页填写 X-Admin-Token。");
+      }
+      const headers = { ...options.headers };
+      if (jwt) {
+        headers.Authorization = "Bearer " + jwt;
+      } else {
+        headers["X-Admin-Token"] = legacy;
+      }
+      const response = await fetch(path, { ...options, headers });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(apiErrorMessage(text, response.status));
+      }
+      return response.json();
+    }
+
+    function statusText(status) {
+      const map = {
+        online: "在线",
+        offline: "离线",
+        pending: "待领取",
+        received: "已领取",
+        executing: "执行中",
+        success: "成功",
+        failed: "失败",
+        timeout: "超时",
+        cancelled: "已取消"
+      };
+      return map[status] || status || "-";
+    }
+
+    function commandTypeText(type) {
+      const map = {
+        pause_trading: "暂停交易",
+        resume_trading: "恢复交易",
+        close_all: "全部平仓",
+        close_symbol: "按品种平仓",
+        close_ticket: "按订单号平仓",
+        open_order: "手动开单",
+        open_market: "市价建仓",
+        open_pending: "挂单建仓",
+        update_params: "更新运行参数",
+        cancel_order: "撤销挂单",
+        manual_manage: "加入人工管理",
+        manual_release: "移出人工管理"
+      };
+      return map[type] || type || "-";
+    }
+
+    function commandGroup(type) {
+      if (type === "open_order") return "建仓";
+      if (["close_all", "close_symbol", "close_ticket", "cancel_order"].includes(type)) return "平仓/撤单";
+      if (["pause_trading", "resume_trading"].includes(type)) return "自动交易控制";
+      if (["manual_manage", "manual_release"].includes(type)) return "人工管理标记";
+      return "其他";
+    }
+
+    function badgeClass(status) {
+      const known = ["online", "offline", "pending", "received", "executing", "success", "failed", "timeout", "cancelled"];
+      return `badge ${known.includes(status) ? status : "normal"}`;
+    }
+
+    function allowTradingLabel(value) {
+      if (value === true) return "允许";
+      if (value === false) return "禁止";
+      return "未知";
+    }
+
+    function activeCommands() {
+      return state.commands.filter((command) => ["pending", "received", "executing"].includes(command.status));
+    }
+
+    function opText(id) {
+      return (document.getElementById(id)?.value || "").trim();
+    }
+
+    function opNumber(id) {
+      const raw = opText(id);
+      if (raw === "") return undefined;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    function renderPermissionNote() {
+      if (!principal) {
+        elements.permissionNote.textContent = "权限：当前使用静态 Token 或未读取到 JWT 用户；最终能否交易由后端权限校验。";
+        setOperationControlsEnabled(true);
+        return;
+      }
+      if (principal.role === "admin") {
+        elements.permissionNote.textContent = `权限：${principal.username}（管理员）可查看和操作全部 EA。`;
+        setOperationControlsEnabled(true);
+        return;
+      }
+      const assignment = currentAssignment();
+      if (!assignment) {
+        elements.permissionNote.textContent = `权限：${principal.username}（普通用户）未分配当前 EA，只能查看已授权页面。`;
+        setOperationControlsEnabled(false);
+        return;
+      }
+      const roleText = assignment.is_primary_operator ? "主操作者" : "协作者";
+      const tradeText = assignment.can_trade ? "可交易" : "只读";
+      elements.permissionNote.textContent = `权限：${principal.username}（普通用户 / ${roleText} / ${tradeText}）。${assignment.can_trade ? "允许下发当前 EA 的交易命令。" : "当前 EA 未授予交易权限，操作按钮已禁用。"}`;
+      setOperationControlsEnabled(Boolean(assignment.can_trade));
+    }
+
+    function currentAssignment() {
+      return (state.myAssignments || []).find((item) => item.ea_id === state.eaId) || null;
+    }
+
+    function setOperationControlsEnabled(enabled) {
+      operationButtons().forEach((button) => {
+        button.disabled = !enabled;
+        button.title = enabled ? "" : "当前用户没有该 EA 的交易权限";
+      });
+    }
+
+    async function loadPrincipal() {
+      const jwt = getStoredJwt();
+      if (!jwt) {
+        renderPermissionNote();
+        return;
+      }
+      try {
+        const response = await fetch("/api/auth/me", {
+          headers: { Authorization: "Bearer " + jwt }
+        });
+        if (response.ok) {
+          principal = await response.json();
+        }
+      } catch (_error) {
+        principal = null;
+      }
+      renderPermissionNote();
+    }
+
+    async function loadMyAssignments() {
+      try {
+        state.myAssignments = await api("/api/admin/my-assignments");
+      } catch (_error) {
+        state.myAssignments = [];
+      }
+      renderPermissionNote();
+    }
+
+    function firstPositionSymbol() {
+      return state.positions.find((position) => position.symbol)?.symbol || "";
+    }
+
+    function firstPositionTicket() {
+      return state.positions.find((position) => position.ticket)?.ticket || "";
+    }
+
+    function commandTypeForOperation(operation) {
+      if (operation === "open_market" || operation === "open_pending") return "open_order";
+      return operation;
+    }
+
+    function validateStopLossTakeProfit({ side, price, sl, tp, context }) {
+      const hasSl = sl !== undefined;
+      const hasTp = tp !== undefined;
+      if (hasSl && !Number.isFinite(sl)) throw new Error("止损价必须是数字。");
+      if (hasTp && !Number.isFinite(tp)) throw new Error("止盈价必须是数字。");
+      if (hasSl && hasTp) {
+        if (side === "buy" && sl >= tp) throw new Error("买入方向通常要求止损价低于止盈价。");
+        if (side === "sell" && tp >= sl) throw new Error("卖出方向通常要求止盈价低于止损价。");
+      }
+      if (context === "pending" && Number.isFinite(price)) {
+        if (side === "buy") {
+          if (hasSl && sl >= price) throw new Error("买入挂单的止损价应低于挂单价格。");
+          if (hasTp && tp <= price) throw new Error("买入挂单的止盈价应高于挂单价格。");
+        }
+        if (side === "sell") {
+          if (hasSl && sl <= price) throw new Error("卖出挂单的止损价应高于挂单价格。");
+          if (hasTp && tp >= price) throw new Error("卖出挂单的止盈价应低于挂单价格。");
+        }
+      }
+    }
+
+    function isRiskyOperation(operation) {
+      return ["close_all", "close_symbol", "close_ticket", "cancel_order", "open_market", "open_pending"].includes(operation);
+    }
+
+    function updateOperationFields() {
+      const operation = elements.tradeOperation.value;
+      document.querySelectorAll("[data-op-fields]").forEach((el) => {
+        const operations = String(el.dataset.opFields || "").split(/\s+/);
+        el.classList.toggle("show", operations.includes(operation));
+      });
+      renderTradeSafetyNote();
+    }
+
+    function renderTradeSafetyNote() {
+      const config = state.safetyConfig;
+      if (!config) {
+        elements.tradeSafetyNote.textContent = "交易安全限制加载中；提交后仍会由后端做最终校验。";
+        return;
+      }
+      const symbols = config.allowed_trade_symbols || [];
+      const operation = elements.tradeOperation.value;
+      const symbolText = symbols.length ? symbols.join(", ") : "不限";
+      const volumeText = Number.isFinite(Number(config.max_manual_order_volume))
+        ? `最大建仓手数：${config.max_manual_order_volume}`
+        : "最大建仓手数：未配置";
+      const appliesToSymbol = ["open_market", "open_pending", "close_symbol"].includes(operation);
+      const symbolHelp = appliesToSymbol
+        ? `当前操作会校验品种；允许品种：${symbolText}`
+        : `允许品种：${symbolText}`;
+      elements.tradeSafetyNote.innerHTML = `<strong>安全限制</strong>：${escapeHtml(volumeText)}；${escapeHtml(symbolHelp)}。`;
+      const volumeInput = document.getElementById("opVolume");
+      if (volumeInput && Number.isFinite(Number(config.max_manual_order_volume))) {
+        volumeInput.max = String(config.max_manual_order_volume);
+      }
+    }
+
+    function validatePayloadAgainstSafety(operation, payload) {
+      const config = state.safetyConfig;
+      if (!config) return;
+      if (operation === "open_market" || operation === "open_pending") {
+        const maxVolume = Number(config.max_manual_order_volume);
+        const volume = Number(payload.volume);
+        if (Number.isFinite(maxVolume) && Number.isFinite(volume) && volume > maxVolume) {
+          throw new Error(`建仓手数不能超过当前安全上限：${maxVolume}。`);
+        }
+      }
+      const symbols = (config.allowed_trade_symbols || []).map((item) => String(item).toUpperCase());
+      if (payload.symbol && symbols.length && !symbols.includes(String(payload.symbol).toUpperCase())) {
+        throw new Error(`交易品种不在白名单中：${payload.symbol}。允许品种：${symbols.join(", ")}。`);
+      }
+    }
+
+    function operationPayload(operation) {
+      const reason = elements.actionReason.value.trim();
+      const payload = { source: "ea-detail-ui" };
+      if (reason) payload.reason = reason;
+      if (operation === "manual_manage") {
+        payload.manual_trade = true;
+        payload.manual_manage = true;
+        payload.order_source = "manual";
+      }
+      if (operation === "manual_release") {
+        payload.manual_release = true;
+      }
+      if (operation === "close_symbol") {
+        const symbol = opText("opSymbol") || firstPositionSymbol();
+        if (!symbol) throw new Error("缺少品种，无法按品种平仓。");
+        payload.symbol = symbol;
+      }
+      if (operation === "close_ticket" || operation === "cancel_order") {
+        const ticket = opText("opTicket") || firstPositionTicket();
+        if (!ticket) throw new Error(`缺少 ticket，无法执行${commandTypeText(operation)}。`);
+        payload.ticket = ticket;
+      }
+      if (operation === "close_all") {
+        const slippage = opNumber("opSlippage");
+        if (slippage !== undefined) {
+          if (!Number.isFinite(slippage) || slippage < 0) throw new Error("最大滑点不能小于 0。");
+          payload.max_slippage_points = slippage;
+        }
+      }
+      if (operation === "open_market" || operation === "open_pending") {
+        const symbol = opText("opSymbol");
+        const side = opText("opSide") || "buy";
+        const volume = opNumber("opVolume");
+        if (!symbol) throw new Error("请填写交易品种。");
+        if (!Number.isFinite(volume) || volume <= 0) throw new Error("建仓手数必须大于 0。");
+        const sl = opNumber("opSl");
+        const tp = opNumber("opTp");
+        validateStopLossTakeProfit({ side, sl, tp, context: "market" });
+        payload.symbol = symbol;
+        payload.side = side;
+        payload.volume = volume;
+        payload.manual_trade = true;
+        payload.order_source = "manual";
+        if (sl !== undefined) {
+          payload.sl = sl;
+        }
+        if (tp !== undefined) {
+          payload.tp = tp;
+        }
+        const comment = opText("opComment");
+        if (comment) payload.comment = comment;
+      }
+      if (operation === "open_pending") {
+        const price = opNumber("opPrice");
+        if (!Number.isFinite(price) || price <= 0) throw new Error("挂单价格必须大于 0。");
+        const orderType = opText("opOrderType") || "buy_limit";
+        const orderSide = orderType.startsWith("sell") ? "sell" : "buy";
+        if (payload.side !== orderSide) {
+          throw new Error("挂单类型和买卖方向不一致，请重新选择。");
+        }
+        validateStopLossTakeProfit({ side: payload.side, price, sl: payload.sl, tp: payload.tp, context: "pending" });
+        payload.order_mode = "pending";
+        payload.pending_order = true;
+        payload.order_type = orderType;
+        payload.price = price;
+      }
+      validatePayloadAgainstSafety(operation, payload);
+      return payload;
+    }
+
+    function formatPayloadSummary(payload) {
+      const fields = [];
+      if (payload.symbol) fields.push(`品种=${payload.symbol}`);
+      if (payload.side) fields.push(`方向=${payload.side}`);
+      if (payload.volume !== undefined) fields.push(`手数=${payload.volume}`);
+      if (payload.order_type) fields.push(`挂单类型=${payload.order_type}`);
+      if (payload.price !== undefined) fields.push(`价格=${payload.price}`);
+      if (payload.ticket) fields.push(`ticket=${payload.ticket}`);
+      if (payload.max_slippage_points !== undefined) fields.push(`最大滑点=${payload.max_slippage_points}`);
+      if (payload.reason) fields.push(`原因=${payload.reason}`);
+      return fields.length ? fields.join("；") : "无额外参数";
+    }
+
+    function renderActionPanel() {
+      const active = activeCommands();
+      elements.activeCommandCount.textContent = String(active.length);
+      elements.activeCommandList.innerHTML = active.length
+        ? active.slice(0, 5).map((command) => `
+          <div class="mini-item">
+            <strong>#${escapeHtml(command.id)} · ${escapeHtml(commandTypeText(command.command_type))}</strong>
+            <div class="meta">${escapeHtml(statusText(command.status))} · ${escapeHtml(commandGroup(command.command_type))} · ${escapeHtml(formatDate(command.created_at))}</div>
+          </div>
+        `).join("")
+        : '<div class="empty" style="padding: 12px;">当前没有未完成命令。</div>';
+      if (!state.ea) {
+        elements.actionRiskNote.textContent = "未找到 EA，暂不能下发操作。";
+        return;
+      }
+      const notes = [];
+      notes.push(`当前状态：${statusText(state.ea.status)}；交易许可：${allowTradingLabel(state.ea.allow_trading)}。`);
+      if (active.length) {
+        notes.push(`已有 ${active.length} 条待领取 / 已领取 / 执行中命令，继续下发会追加到该 EA 的命令队列。`);
+      } else {
+        notes.push("当前没有未完成命令。");
+      }
+      elements.actionRiskNote.textContent = notes.join(" ");
+    }
+
+    function conflictWarningsFor(operation, active) {
+      const warnings = [];
+      const activeTypes = active.map((command) => command.command_type);
+      const opening = operation === "open_market" || operation === "open_pending";
+      const closing = ["close_all", "close_symbol", "close_ticket", "cancel_order"].includes(operation);
+      if (opening && activeTypes.some((type) => ["close_all", "close_symbol", "close_ticket"].includes(type))) {
+        warnings.push("已有平仓类命令未完成，不建议继续追加建仓/挂单命令。");
+      }
+      if (closing && activeTypes.includes("open_order")) {
+        warnings.push("已有建仓/挂单命令未完成，请确认是否要继续追加平仓/撤单命令。");
+      }
+      if (operation === "resume_trading" && activeTypes.some((type) => ["open_order", "close_all", "close_symbol", "close_ticket", "cancel_order"].includes(type))) {
+        warnings.push("已有人工交易命令未完成，建议等待处理完成后再恢复自动策略。");
+      }
+      if (operation === "pause_trading" && activeTypes.includes("resume_trading")) {
+        warnings.push("已有恢复自动命令未完成，再发暂停命令可能造成状态来回切换。");
+      }
+      return warnings;
+    }
+
+    function buildConfirmModel(operation) {
+      const requestedBy = elements.actionRequestedBy.value.trim() || "ea-detail-ui";
+      const active = activeCommands();
+      const payload = operationPayload(operation);
+      const commandType = commandTypeForOperation(operation);
+      const warnings = [];
+      if (state.ea?.status === "offline") warnings.push("该 EA 当前离线，命令会等待 EA 恢复连接后领取。");
+      if (active.length) warnings.push(`该 EA 已有 ${active.length} 条待领取 / 已领取 / 执行中命令，请确认是否继续追加。`);
+      warnings.push(...conflictWarningsFor(operation, active));
+      if (operation === "pause_trading") warnings.push("暂停 EA 会禁止该 EA 后续自动交易，直到恢复自动。");
+      if (isRiskyOperation(operation)) warnings.push("该操作会影响持仓、开仓或挂单，请确认目标 EA 和关键参数。");
+      active.slice(0, 5).forEach((command) => {
+        warnings.push(`未完成命令：#${command.id} ${commandTypeText(command.command_type)} / ${statusText(command.status)} / ${formatDate(command.created_at)}`);
+      });
+      return {
+        title: `确认下发：${commandTypeText(operation)}`,
+        summary: `目标 EA：${state.eaId}；操作人：${requestedBy}`,
+        details: [
+          `账号 / Broker：${state.ea?.account_number || "-"} / ${state.ea?.broker || "-"}`,
+          `当前状态：${statusText(state.ea?.status)}；交易许可：${allowTradingLabel(state.ea?.allow_trading)}`,
+          `参数：${formatPayloadSummary(payload)}`
+        ],
+        warnings,
+        command: {
+          ea_id: state.eaId,
+          command_type: commandType,
+          payload,
+          requested_by: requestedBy
+        }
+      };
+    }
+
+    function closeConfirmDialog(result) {
+      elements.confirmModal.classList.remove("show");
+      elements.confirmModal.setAttribute("aria-hidden", "true");
+      if (pendingConfirmResolve) {
+        pendingConfirmResolve(result);
+        pendingConfirmResolve = null;
+      }
+    }
+
+    function openConfirmDialog(model) {
+      elements.confirmTitle.textContent = model.title;
+      elements.confirmSummary.textContent = model.summary;
+      elements.confirmDetails.innerHTML = model.details.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
+      elements.confirmWarnings.style.display = model.warnings.length ? "block" : "none";
+      elements.confirmWarnings.innerHTML = model.warnings.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
+      elements.confirmModal.classList.add("show");
+      elements.confirmModal.setAttribute("aria-hidden", "false");
+      return new Promise((resolve) => {
+        pendingConfirmResolve = resolve;
+      });
+    }
+
+    function renderSummary() {
+      const ea = state.ea;
+      const snapshot = state.snapshots[0];
+      elements.pageTitle.textContent = ea ? `EA 详情：${ea.ea_id}` : "EA 详情";
+      elements.pageMeta.textContent = ea
+        ? `${ea.terminal || "-"} · ${ea.broker || "-"} · 最后心跳：${formatDate(ea.last_seen_at)}`
+        : state.eaId ? `未找到 EA：${state.eaId}` : "URL 缺少 ?ea=EA_ID 参数。";
+      elements.summaryStatus.innerHTML = ea ? `<span class="${badgeClass(ea.status)}">${escapeHtml(statusText(ea.status))}</span>` : "-";
+      elements.summaryAllowTrading.innerHTML = ea
+        ? `<span class="${ea.allow_trading ? "badge success" : "badge failed"}">${escapeHtml(allowTradingLabel(ea.allow_trading))}</span>`
+        : "-";
+      elements.summaryAccount.textContent = ea ? `${ea.account_number || "-"} / ${ea.broker || "-"}` : "-";
+      elements.summaryBalance.textContent = snapshot ? `${formatNumber(snapshot.balance)} / ${formatNumber(snapshot.equity)}` : "-";
+      elements.summaryPositions.textContent = String(state.positions.length);
+    }
+
+    function renderPositions() {
+      elements.positionsCount.textContent = `${state.positions.length} 条`;
+      elements.positionsTableBody.innerHTML = state.positions.length
+        ? state.positions.map((position) => `
+          <tr>
+            <td>${escapeHtml(position.ticket)}</td>
+            <td>${escapeHtml(position.symbol)}</td>
+            <td>${escapeHtml(position.side)}</td>
+            <td>${escapeHtml(formatNumber(position.volume))}</td>
+            <td>${escapeHtml(formatNumber(position.open_price))}</td>
+            <td>${escapeHtml(formatNumber(position.current_price))}</td>
+            <td>${escapeHtml(formatNumber(position.sl))} / ${escapeHtml(formatNumber(position.tp))}</td>
+            <td>${escapeHtml(formatNumber(position.profit))}</td>
+            <td>${escapeHtml(formatDate(position.updated_at))}</td>
+          </tr>
+        `).join("")
+        : '<tr><td colspan="9" class="meta">暂无持仓数据。</td></tr>';
+    }
+
+    function renderSnapshots() {
+      elements.snapshotsCount.textContent = `${state.snapshots.length} 条`;
+      elements.snapshotsTableBody.innerHTML = state.snapshots.length
+        ? state.snapshots.map((snapshot) => `
+          <tr>
+            <td>${escapeHtml(formatDate(snapshot.created_at))}</td>
+            <td>${escapeHtml(snapshot.account_number || "-")}</td>
+            <td>${escapeHtml(snapshot.currency || "-")}</td>
+            <td>${escapeHtml(formatNumber(snapshot.balance))}</td>
+            <td>${escapeHtml(formatNumber(snapshot.equity))}</td>
+            <td>${escapeHtml(formatNumber(snapshot.margin))}</td>
+            <td>${escapeHtml(formatNumber(snapshot.free_margin))}</td>
+            <td>${escapeHtml(formatNumber(snapshot.margin_level))}</td>
+            <td>${escapeHtml(formatNumber(snapshot.profit))}</td>
+          </tr>
+        `).join("")
+        : '<tr><td colspan="9" class="meta">暂无快照数据。</td></tr>';
+    }
+
+    function renderCommands() {
+      elements.commandsCount.textContent = `${state.commands.length} 条`;
+      elements.commandsList.innerHTML = state.commands.length
+        ? state.commands.slice(0, 8).map((command) => `
+          <div class="side-item">
+            <div class="side-item-head">
+              <div class="side-item-title">${escapeHtml(commandTypeText(command.command_type))}</div>
+              <span class="${badgeClass(command.status)}">${escapeHtml(statusText(command.status))}</span>
+            </div>
+            <div class="side-item-meta">
+              <div class="meta">创建：${escapeHtml(formatDate(command.created_at))}</div>
+              <div class="meta">领取：${escapeHtml(formatDate(command.received_at))}</div>
+              <div class="meta">完成：${escapeHtml(formatDate(command.completed_at))}</div>
+              <div class="meta">耗时：${escapeHtml(commandDuration(command))}</div>
+              <div class="meta">操作人：${escapeHtml(command.requested_by || "-")}</div>
+              ${command.error_message ? `<div class="meta">错误：${escapeHtml(command.error_message)}</div>` : ""}
+            </div>
+          </div>
+        `).join("")
+        : '<div class="empty">暂无命令记录。</div>';
+      renderActionPanel();
+    }
+
+    async function loadSafetyConfig() {
+      state.safetyConfig = await api("/api/admin/safety-config");
+      renderTradeSafetyNote();
+    }
+
+    async function sendOperation(operation) {
+      clearMessage();
+      if (principal && principal.role !== "admin" && !currentAssignment()?.can_trade) {
+        showMessage("当前用户没有该 EA 的交易权限，无法下发操作。", "error");
+        return;
+      }
+      if (!state.ea) {
+        showMessage("未找到当前 EA，无法下发操作。", "error");
+        return;
+      }
+      let model;
+      try {
+        model = buildConfirmModel(operation);
+      } catch (error) {
+        showMessage(error.message, "error");
+        return;
+      }
+      const ok = await openConfirmDialog(model);
+      if (!ok) return;
+      try {
+        await api("/api/admin/commands", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(model.command)
+        });
+        showMessage(`已下发“${commandTypeText(operation)}”命令。`, "ok");
+        await refreshDetail();
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    }
+
+    async function refreshDetail() {
+      clearMessage();
+      if (!state.eaId) {
+        showMessage("URL 缺少 ea 参数，例如 /ea-detail?ea=EA_ID。", "error");
+        renderSummary();
+        return;
+      }
+      try {
+        const eas = await api("/api/admin/eas");
+        state.ea = eas.find((ea) => ea.ea_id === state.eaId) || null;
+        if (!state.ea) {
+          state.positions = [];
+          state.snapshots = [];
+          state.commands = [];
+          renderSummary();
+          renderPositions();
+          renderSnapshots();
+          renderCommands();
+          renderActionPanel();
+          showMessage(`未找到 EA：${state.eaId}`, "error");
+          return;
+        }
+        const encodedEaId = encodeURIComponent(state.eaId);
+        const [positions, snapshots, commands, safetyConfig] = await Promise.all([
+          api(`/api/admin/eas/${encodedEaId}/positions`),
+          api(`/api/admin/eas/${encodedEaId}/snapshots?limit=20`),
+          api(`/api/admin/commands?ea_id=${encodedEaId}&limit=20`),
+          api("/api/admin/safety-config")
+        ]);
+        state.positions = positions;
+        state.snapshots = snapshots;
+        state.commands = commands;
+        state.safetyConfig = safetyConfig;
+        renderSummary();
+        renderPositions();
+        renderSnapshots();
+        renderCommands();
+        renderTradeSafetyNote();
+        showMessage("EA 详情已刷新。", "ok");
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    }
+
+    function loadPersistedToken() {
+      const token = localStorage.getItem("ea-admin-token");
+      if (token) elements.adminToken.value = token;
+    }
+
+    document.getElementById("saveTokenBtn").addEventListener("click", () => {
+      localStorage.setItem("ea-admin-token", getToken());
+      showMessage("Token 已保存到当前浏览器。", "ok");
+    });
+    document.getElementById("refreshBtn").addEventListener("click", refreshDetail);
+    document.querySelectorAll("[data-safe-command]").forEach((button) => {
+      button.addEventListener("click", () => sendOperation(button.dataset.safeCommand));
+    });
+    elements.tradeOperation.addEventListener("change", updateOperationFields);
+    elements.sendTradeCommandBtn.addEventListener("click", () => sendOperation(elements.tradeOperation.value));
+    elements.confirmCancelBtn.addEventListener("click", () => closeConfirmDialog(false));
+    elements.confirmSendBtn.addEventListener("click", () => closeConfirmDialog(true));
+    elements.confirmModal.addEventListener("click", (event) => {
+      if (event.target === elements.confirmModal) closeConfirmDialog(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && elements.confirmModal.classList.contains("show")) {
+        closeConfirmDialog(false);
+      }
+    });
+
+    loadPersistedToken();
+    updateOperationFields();
+    loadPrincipal().then(loadMyAssignments);
+    loadSafetyConfig().catch(() => {
+      renderTradeSafetyNote();
+    });
+    refreshDetail();
+  </script>
+</body>
+</html>

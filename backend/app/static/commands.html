@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>命令历史 - EA 中央控制系统</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --panel: #121a2b;
+      --panel-alt: #172036;
+      --border: #26324d;
+      --text: #e5ecff;
+      --muted: #94a3c7;
+      --accent: #60a5fa;
+      --bad: #ef4444;
+      --ok: #16a34a;
+      --warn: #f59e0b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 22px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    h1, h2 {
+      margin: 0;
+    }
+
+    h1 { font-size: 24px; }
+    h2 { font-size: 18px; }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr 160px auto auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .filter-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 180px 220px auto auto;
+      gap: 10px;
+      align-items: end;
+      margin-top: 12px;
+    }
+
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .input,
+    .select {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      background: #334155;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .button.primary {
+      background: var(--accent);
+      color: #081120;
+      font-weight: bold;
+    }
+
+    .button.ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+    }
+
+    .button.warn {
+      background: #7c2d12;
+    }
+
+    .button:disabled {
+      cursor: not-allowed;
+      opacity: 0.48;
+    }
+
+    .message {
+      display: none;
+      margin-top: 10px;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .message.show { display: block; }
+    .message.ok { background: rgba(22, 163, 74, 0.18); color: #bbf7d0; }
+    .message.error { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
+    .message.info { background: rgba(96, 165, 250, 0.18); color: #bfdbfe; }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #18233c;
+      z-index: 1;
+    }
+
+    pre,
+    code {
+      font-family: Consolas, monospace;
+      font-size: 12px;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-width: 360px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 72px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge.success { background: rgba(22, 163, 74, 0.2); color: #86efac; }
+    .badge.failed, .badge.cancelled, .badge.timeout { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    .badge.pending, .badge.received, .badge.executing { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+    .badge.normal { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+
+    .status-cell {
+      display: grid;
+      gap: 8px;
+      min-width: 180px;
+    }
+
+    .status-flow {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .status-step {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-step::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #475569;
+    }
+
+    .status-step.done::before { background: var(--ok); }
+    .status-step.current::before { background: var(--warn); }
+    .status-step.failed::before { background: var(--bad); }
+
+    .status-step + .status-step::after {
+      content: "";
+    }
+
+    .lifecycle-meta {
+      display: grid;
+      gap: 4px;
+      min-width: 190px;
+    }
+
+    .lifecycle-meta strong {
+      color: var(--text);
+    }
+
+    .payload-row td {
+      background: rgba(15, 23, 42, 0.64);
+    }
+
+    .payload-box {
+      display: grid;
+      gap: 8px;
+    }
+
+    .payload-box pre {
+      max-width: none;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(2, 6, 23, 0.42);
+    }
+
+    @media (max-width: 900px) {
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .filter-toolbar {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="panel">
+      <div class="section-title">
+        <div>
+          <h1>命令历史</h1>
+          <div class="meta">集中查看 EA 命令状态、执行结果和执行日志。</div>
+        </div>
+        <div class="meta">
+          <a href="/admin">中央控制系统</a> ·
+          <a href="/manual-trades">人工建仓管理</a> ·
+          <a href="/dashboard">监控大屏</a>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div>
+          <label for="adminToken" class="meta">静态 X-Admin-Token（JWT 会优先使用）</label>
+          <input id="adminToken" class="input" type="password" placeholder="可留空，优先使用已登录 JWT" />
+        </div>
+        <div>
+          <label for="limitInput" class="meta">条数</label>
+          <select id="limitInput" class="select">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+          </select>
+        </div>
+        <button id="saveTokenBtn" class="button ghost" type="button">保存 Token</button>
+        <button id="refreshBtn" class="button primary" type="button">刷新</button>
+      </div>
+      <div id="pageMessage" class="message"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <div>
+          <h2>筛选</h2>
+          <div id="filterSummary" class="meta">显示全部命令。</div>
+        </div>
+      </div>
+      <div class="filter-toolbar">
+        <div>
+          <label for="eaSearchInput" class="meta">EA / 操作人 / Payload 搜索</label>
+          <input id="eaSearchInput" class="input" type="search" placeholder="输入 EA ID、操作人、关键字" />
+        </div>
+        <div>
+          <label for="statusFilter" class="meta">状态</label>
+          <select id="statusFilter" class="select">
+            <option value="all">全部状态</option>
+            <option value="active">只看未完成</option>
+            <option value="pending">待领取</option>
+            <option value="received">已领取</option>
+            <option value="executing">执行中</option>
+            <option value="success">成功</option>
+            <option value="failed">失败</option>
+            <option value="timeout">超时</option>
+            <option value="cancelled">已取消</option>
+          </select>
+        </div>
+        <div>
+          <label for="typeFilter" class="meta">命令类型</label>
+          <select id="typeFilter" class="select">
+            <option value="all">全部类型</option>
+            <option value="pause_trading">暂停交易</option>
+            <option value="resume_trading">恢复交易</option>
+            <option value="close_all">全部平仓</option>
+            <option value="close_symbol">按品种平仓</option>
+            <option value="close_ticket">按订单号平仓</option>
+            <option value="open_order">手动开单</option>
+            <option value="cancel_order">撤销挂单</option>
+            <option value="manual_manage">加入人工管理</option>
+            <option value="manual_release">移出人工管理</option>
+            <option value="update_params">更新运行参数</option>
+          </select>
+        </div>
+        <label class="check-row">
+          <input id="activeOnlyToggle" type="checkbox" />
+          只看未完成命令
+        </label>
+        <button id="exportCsvBtn" class="button" type="button">导出 CSV</button>
+        <button id="clearFiltersBtn" class="button ghost" type="button">清空筛选</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <div>
+          <h2>命令记录</h2>
+          <div id="commandCount" class="meta">0 条</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>EA ID</th>
+              <th>命令类型</th>
+              <th>状态</th>
+              <th>生命周期</th>
+              <th>操作人</th>
+              <th>创建时间</th>
+              <th>过期时间</th>
+              <th>执行结果</th>
+              <th>执行日志</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="commandsTableBody">
+            <tr><td colspan="11" class="meta">暂无命令记录。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const elements = {
+      adminToken: document.getElementById("adminToken"),
+      limitInput: document.getElementById("limitInput"),
+      eaSearchInput: document.getElementById("eaSearchInput"),
+      statusFilter: document.getElementById("statusFilter"),
+      typeFilter: document.getElementById("typeFilter"),
+      activeOnlyToggle: document.getElementById("activeOnlyToggle"),
+      exportCsvBtn: document.getElementById("exportCsvBtn"),
+      clearFiltersBtn: document.getElementById("clearFiltersBtn"),
+      pageMessage: document.getElementById("pageMessage"),
+      filterSummary: document.getElementById("filterSummary"),
+      commandCount: document.getElementById("commandCount"),
+      commandsTableBody: document.getElementById("commandsTableBody")
+    };
+
+    let allCommands = [];
+    const expandedPayloadIds = new Set();
+    let principal = null;
+    let myAssignments = [];
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    }
+
+    function parseDate(value) {
+      if (!value) return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function formatDuration(ms) {
+      if (!Number.isFinite(ms) || ms < 0) return "-";
+      const totalSeconds = Math.round(ms / 1000);
+      if (totalSeconds < 60) return `${totalSeconds} 秒`;
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      if (minutes < 60) return seconds ? `${minutes} 分 ${seconds} 秒` : `${minutes} 分`;
+      const hours = Math.floor(minutes / 60);
+      const restMinutes = minutes % 60;
+      return restMinutes ? `${hours} 小时 ${restMinutes} 分` : `${hours} 小时`;
+    }
+
+    function prettyJson(value) {
+      try {
+        return JSON.stringify(value ?? {}, null, 2);
+      } catch (_error) {
+        return String(value ?? "");
+      }
+    }
+
+    function getStoredJwt() {
+      return (localStorage.getItem("ea-admin-jwt") || "").trim();
+    }
+
+    function getToken() {
+      return elements.adminToken.value.trim();
+    }
+
+    function showMessage(text, type = "info") {
+      elements.pageMessage.textContent = text;
+      elements.pageMessage.className = `message show ${type}`;
+    }
+
+    function clearMessage() {
+      elements.pageMessage.className = "message";
+      elements.pageMessage.textContent = "";
+    }
+
+    function apiErrorMessage(text, statusCode) {
+      if (!text) return `请求失败：${statusCode}`;
+      try {
+        const parsed = JSON.parse(text);
+        const detail = parsed.detail;
+        if (typeof detail === "string") return detail;
+        if (Array.isArray(detail)) {
+          return detail.map((item) => {
+            const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+            return [location, item.msg].filter(Boolean).join("：");
+          }).join("；");
+        }
+        if (detail) return JSON.stringify(detail);
+      } catch {
+        // Non-JSON response; show the original text.
+      }
+      return text;
+    }
+
+    async function api(path, options = {}) {
+      const jwt = getStoredJwt();
+      const legacy = getToken();
+      if (!jwt && !legacy) {
+        throw new Error("请先在中央控制系统登录，或在本页填写 X-Admin-Token。");
+      }
+      const headers = { ...options.headers };
+      if (jwt) {
+        headers.Authorization = "Bearer " + jwt;
+      } else {
+        headers["X-Admin-Token"] = legacy;
+      }
+      const response = await fetch(path, { ...options, headers });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(apiErrorMessage(text, response.status));
+      }
+      return response.json();
+    }
+
+    async function loadPermissionContext() {
+      const jwt = getStoredJwt();
+      const legacy = getToken();
+      if (jwt) {
+        try {
+          const response = await fetch("/api/auth/me", { headers: { Authorization: "Bearer " + jwt } });
+          principal = response.ok ? await response.json() : null;
+        } catch (_error) {
+          principal = null;
+        }
+      } else if (legacy) {
+        principal = { username: "legacy-token", role: "admin" };
+      } else {
+        principal = null;
+      }
+      try {
+        myAssignments = await api("/api/admin/my-assignments");
+      } catch (_error) {
+        myAssignments = [];
+      }
+    }
+
+    function isAdmin() {
+      return principal?.role === "admin";
+    }
+
+    function assignmentForEa(eaId) {
+      return (myAssignments || []).find((item) => item.ea_id === eaId) || null;
+    }
+
+    function canTradeCommand(command) {
+      if (isAdmin()) return true;
+      return Boolean(assignmentForEa(command.ea_id)?.can_trade);
+    }
+
+    function commandTypeText(type) {
+      const map = {
+        pause_trading: "暂停交易",
+        resume_trading: "恢复交易",
+        close_all: "全部平仓",
+        close_symbol: "按品种平仓",
+        close_ticket: "按订单号平仓",
+        open_order: "手动开单",
+        update_params: "更新运行参数",
+        cancel_order: "撤销挂单",
+        manual_manage: "加入人工管理",
+        manual_release: "移出人工管理"
+      };
+      return map[type] || type;
+    }
+
+    function statusText(status) {
+      const map = {
+        pending: "待领取",
+        received: "已领取",
+        executing: "执行中",
+        success: "成功",
+        failed: "失败",
+        timeout: "超时",
+        cancelled: "已取消"
+      };
+      return map[status] || status;
+    }
+
+    function badgeClass(status) {
+      const known = ["pending", "received", "executing", "success", "failed", "timeout", "cancelled"];
+      return `badge ${known.includes(status) ? status : "normal"}`;
+    }
+
+    function terminalStatus(status) {
+      return ["success", "failed", "timeout", "cancelled"].includes(status);
+    }
+
+    function renderStatusFlow(command) {
+      const steps = [
+        ["pending", "待领取"],
+        ["received", "已领取"],
+        ["executing", "执行中"],
+      ];
+      const status = command.status;
+      const index = steps.findIndex(([key]) => key === status);
+      const doneUntil = terminalStatus(status) ? steps.length - 1 : index - 1;
+      const flow = steps.map(([key, label], stepIndex) => {
+        let className = "status-step";
+        if (stepIndex <= doneUntil) className += " done";
+        if (key === status) className += " current";
+        return `<span class="${className}">${label}</span>`;
+      }).join("<span>›</span>");
+      const terminal = terminalStatus(status)
+        ? `<span>›</span><span class="status-step ${status === "success" ? "done" : "failed"}">${escapeHtml(statusText(status))}</span>`
+        : "";
+      return `<div class="status-flow">${flow}${terminal}</div>`;
+    }
+
+    function renderCommandLogs(command) {
+      if (!Array.isArray(command.logs) || !command.logs.length) return "-";
+      return command.logs.map((log) => `
+        <div style="margin-bottom: 8px;">
+          <div>${escapeHtml(statusText(log.status))} · ${escapeHtml(formatDate(log.created_at))}</div>
+          <div class="meta">${escapeHtml(log.message || "-")}</div>
+          ${log.raw ? `<pre>${escapeHtml(prettyJson(log.raw))}</pre>` : ""}
+        </div>
+      `).join("");
+    }
+
+    function renderCommandResult(command) {
+      if (command.error_message) return `<span class="meta">${escapeHtml(command.error_message)}</span>`;
+      if (command.completed_at) return `完成：${escapeHtml(formatDate(command.completed_at))}`;
+      if (command.received_at) return `领取：${escapeHtml(formatDate(command.received_at))}`;
+      return "-";
+    }
+
+    function commandDuration(command) {
+      const started = parseDate(command.created_at);
+      if (!started) return "-";
+      const ended = parseDate(command.completed_at) || parseDate(command.updated_at);
+      if (!ended) return "-";
+      return formatDuration(ended.getTime() - started.getTime());
+    }
+
+    function renderLifecycle(command) {
+      const received = command.received_at ? `领取：${formatDate(command.received_at)}` : "领取：尚未领取";
+      const completed = command.completed_at ? `完成：${formatDate(command.completed_at)}` : "完成：尚未完成";
+      return `
+        <div class="lifecycle-meta">
+          <strong>耗时：${escapeHtml(commandDuration(command))}</strong>
+          <div class="meta">${escapeHtml(received)}</div>
+          <div class="meta">${escapeHtml(completed)}</div>
+        </div>
+      `;
+    }
+
+    function isCancellableStatus(command) {
+      return ["pending", "received", "executing"].includes(command.status);
+    }
+
+    function renderCommandActions(command) {
+      const payloadLabel = expandedPayloadIds.has(command.id) ? "隐藏参数" : "查看参数";
+      const payloadButton = `<button class="button ghost" type="button" data-toggle-payload-id="${command.id}">${payloadLabel}</button>`;
+      const canCancel = isCancellableStatus(command);
+      const canTrade = canTradeCommand(command);
+      const cancelButton = canCancel
+        ? `<button class="button warn" type="button" data-cancel-command-id="${command.id}" ${canTrade ? "" : "disabled"} title="${canTrade ? "" : "当前用户没有该 EA 的交易权限"}">取消</button>`
+        : "";
+      return `<div style="display:flex;gap:8px;flex-wrap:wrap;">${payloadButton}${cancelButton}</div>`;
+    }
+
+    function renderPayloadRow(command) {
+      if (!expandedPayloadIds.has(command.id)) return "";
+      return `
+        <tr class="payload-row">
+          <td colspan="11">
+            <div class="payload-box">
+              <strong>命令参数 Payload</strong>
+              <pre>${escapeHtml(prettyJson(command.payload || {}))}</pre>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
+    function activeStatuses() {
+      return ["pending", "received", "executing"];
+    }
+
+    function commandSearchText(command) {
+      return [
+        command.ea_id,
+        command.requested_by,
+        command.command_type,
+        command.status,
+        command.error_message,
+        prettyJson(command.payload || {}),
+      ].join(" ").toLowerCase();
+    }
+
+    function filteredCommands() {
+      const q = elements.eaSearchInput.value.trim().toLowerCase();
+      const status = elements.activeOnlyToggle.checked ? "active" : elements.statusFilter.value;
+      const type = elements.typeFilter.value;
+      return allCommands.filter((command) => {
+        if (status === "active" && !activeStatuses().includes(command.status)) return false;
+        if (status !== "all" && status !== "active" && command.status !== status) return false;
+        if (type !== "all" && command.command_type !== type) return false;
+        if (q && !commandSearchText(command).includes(q)) return false;
+        return true;
+      });
+    }
+
+    function renderFilteredCommands() {
+      const rows = filteredCommands();
+      elements.filterSummary.textContent = `显示 ${rows.length} / ${allCommands.length} 条命令。`;
+      renderCommands(rows);
+    }
+
+    function renderCommands(rows) {
+      elements.commandCount.textContent = `${rows.length} 条`;
+      elements.commandsTableBody.innerHTML = rows.length
+        ? rows.map((command) => `
+          <tr>
+            <td>${command.id}</td>
+            <td><a href="/ea-detail?ea=${encodeURIComponent(command.ea_id)}">${escapeHtml(command.ea_id)}</a></td>
+            <td>${escapeHtml(commandTypeText(command.command_type))}</td>
+            <td><div class="status-cell"><span class="${badgeClass(command.status)}">${escapeHtml(statusText(command.status))}</span>${renderStatusFlow(command)}</div></td>
+            <td>${renderLifecycle(command)}</td>
+            <td>${escapeHtml(command.requested_by || "-")}</td>
+            <td>${escapeHtml(formatDate(command.created_at))}</td>
+            <td>${escapeHtml(formatDate(command.expires_at))}</td>
+            <td>${renderCommandResult(command)}</td>
+            <td>${renderCommandLogs(command)}</td>
+            <td>${renderCommandActions(command)}</td>
+          </tr>
+          ${renderPayloadRow(command)}
+        `).join("")
+        : '<tr><td colspan="11" class="meta">暂无命令记录。</td></tr>';
+
+      Array.from(elements.commandsTableBody.querySelectorAll("[data-toggle-payload-id]")).forEach((button) => {
+        button.addEventListener("click", () => {
+          const commandId = Number(button.getAttribute("data-toggle-payload-id"));
+          if (expandedPayloadIds.has(commandId)) expandedPayloadIds.delete(commandId);
+          else expandedPayloadIds.add(commandId);
+          renderFilteredCommands();
+        });
+      });
+
+      Array.from(elements.commandsTableBody.querySelectorAll("[data-cancel-command-id]")).forEach((button) => {
+        button.addEventListener("click", async () => {
+          const commandId = button.getAttribute("data-cancel-command-id");
+          const command = allCommands.find((item) => String(item.id) === String(commandId));
+          if (command && !canTradeCommand(command)) {
+            showMessage("当前用户没有该 EA 的交易权限，不能取消这条命令。", "error");
+            return;
+          }
+          try {
+            await api(`/api/admin/commands/${commandId}/cancel`, { method: "POST" });
+            showMessage(`命令 ${commandId} 已取消。`, "ok");
+            await refreshCommands(false);
+          } catch (error) {
+            showMessage(error.message, "error");
+          }
+        });
+      });
+    }
+
+    function csvCell(value) {
+      const text = String(value ?? "");
+      return `"${text.replaceAll('"', '""')}"`;
+    }
+
+    function exportCommandsCsv() {
+      const rows = filteredCommands();
+      if (!rows.length) {
+        showMessage("当前筛选结果为空，无需导出。", "info");
+        return;
+      }
+      const header = [
+        "ID",
+        "EA ID",
+        "命令类型",
+        "状态",
+        "操作人",
+        "创建时间",
+        "领取时间",
+        "完成时间",
+        "耗时",
+        "过期时间",
+        "执行结果",
+        "Payload",
+      ];
+      const lines = [
+        header.map(csvCell).join(","),
+        ...rows.map((command) => [
+          command.id,
+          command.ea_id,
+          commandTypeText(command.command_type),
+          statusText(command.status),
+          command.requested_by,
+          command.created_at,
+          command.received_at,
+          command.completed_at,
+          commandDuration(command),
+          command.expires_at,
+          command.error_message || "",
+          prettyJson(command.payload || {}),
+        ].map(csvCell).join(",")),
+      ];
+      const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      link.href = url;
+      link.download = `commands-${stamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showMessage(`已导出 ${rows.length} 条命令记录。`, "ok");
+    }
+
+    async function refreshCommands(showOk = true) {
+      clearMessage();
+      try {
+        const limit = encodeURIComponent(elements.limitInput.value);
+        await loadPermissionContext();
+        allCommands = await api(`/api/admin/commands?limit=${limit}`);
+        renderFilteredCommands();
+        if (showOk) showMessage("命令历史已刷新。", "ok");
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    }
+
+    function clearFilters() {
+      elements.eaSearchInput.value = "";
+      elements.statusFilter.value = "all";
+      elements.typeFilter.value = "all";
+      elements.activeOnlyToggle.checked = false;
+      renderFilteredCommands();
+    }
+
+    function loadPersistedToken() {
+      const token = localStorage.getItem("ea-admin-token");
+      if (token) elements.adminToken.value = token;
+    }
+
+    document.getElementById("saveTokenBtn").addEventListener("click", () => {
+      localStorage.setItem("ea-admin-token", getToken());
+      showMessage("Token 已保存到当前浏览器。", "ok");
+    });
+    document.getElementById("refreshBtn").addEventListener("click", refreshCommands);
+    elements.limitInput.addEventListener("change", refreshCommands);
+    elements.eaSearchInput.addEventListener("input", renderFilteredCommands);
+    elements.statusFilter.addEventListener("change", () => {
+      if (elements.statusFilter.value !== "active") elements.activeOnlyToggle.checked = false;
+      renderFilteredCommands();
+    });
+    elements.typeFilter.addEventListener("change", renderFilteredCommands);
+    elements.activeOnlyToggle.addEventListener("change", () => {
+      if (elements.activeOnlyToggle.checked) elements.statusFilter.value = "active";
+      renderFilteredCommands();
+    });
+    elements.exportCsvBtn.addEventListener("click", exportCommandsCsv);
+    elements.clearFiltersBtn.addEventListener("click", clearFilters);
+
+    loadPersistedToken();
+    refreshCommands();
+  </script>
+</body>
+</html>

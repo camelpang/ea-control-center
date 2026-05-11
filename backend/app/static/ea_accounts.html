@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EA 账号列表 · EA Control Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111f;
+      --panel: #101a2d;
+      --panel-alt: #17223a;
+      --border: #263653;
+      --text: #e5ecff;
+      --muted: #94a3c7;
+      --accent: #60a5fa;
+      --ok: #22c55e;
+      --bad: #ef4444;
+      --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1100px 520px at 50% -10%, #13264f 0%, var(--bg) 60%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 14px 22px;
+      background: rgba(8, 17, 31, 0.94);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    h1 { margin: 0; font-size: 1.22rem; }
+    h2 { margin: 0 0 12px; font-size: 1rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    main { padding: 18px 22px 36px; display: grid; gap: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+    .wide { grid-column: 1 / -1; }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(16, 26, 45, 0.88);
+      padding: 14px;
+      overflow: hidden;
+    }
+    .row { display: grid; gap: 9px; margin-bottom: 10px; }
+    .input-action { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .ea-form-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 10px;
+    }
+    .list-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) repeat(10, auto);
+      gap: 10px;
+      align-items: center;
+    }
+    .input, .select, .button {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-alt);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    .button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #2563eb, #1d4ed8);
+      font-weight: 700;
+    }
+    .button.secondary { background: #334155; }
+    .button.danger { background: linear-gradient(180deg, #dc2626, #991b1b); }
+    .button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .table-input, .table-select {
+      min-width: 96px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-alt);
+      color: var(--text);
+      padding: 7px 8px;
+      font: inherit;
+      font-size: 12px;
+    }
+    .table-input { width: 140px; }
+    .table-select { width: 86px; }
+    .check-row { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 14px; }
+    .check-row label { display: inline-flex; gap: 6px; align-items: center; }
+    .bulk-preview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .preview-box {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 12px;
+      background: rgba(8, 17, 31, 0.28);
+      padding: 10px;
+      min-height: 86px;
+    }
+    .preview-title { margin: 0 0 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
+    .preview-list { display: grid; gap: 8px; }
+    .preview-item { color: var(--text); font-size: 13px; line-height: 1.45; }
+    .ea-check {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .meta { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .message {
+      display: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    .message.show { display: block; }
+    .message.ok { background: rgba(34, 197, 94, 0.14); color: #86efac; }
+    .message.err { background: rgba(239, 68, 68, 0.14); color: #fecaca; }
+    .hidden { display: none !important; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 9px 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.16); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    code { color: #bfdbfe; }
+    .badge {
+      display: inline-flex;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(96, 165, 250, 0.16);
+      color: #bfdbfe;
+      font-size: 12px;
+      margin: 0 4px 4px 0;
+    }
+    .badge.online { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+    .badge.offline { background: rgba(239, 68, 68, 0.16); color: #fecaca; }
+    .badge.manual { background: rgba(245, 158, 11, 0.16); color: #fde68a; }
+    .empty { padding: 22px; color: var(--muted); text-align: center; }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(2, 6, 23, 0.78);
+      z-index: 50;
+    }
+    .modal-backdrop.show { display: flex; }
+    .modal {
+      width: min(620px, 100%);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: #101a2d;
+      padding: 18px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    }
+    .token-output {
+      width: 100%;
+      min-height: 86px;
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #08111f;
+      color: var(--text);
+      padding: 10px;
+      font-family: Consolas, monospace;
+      resize: vertical;
+    }
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: 1fr; }
+      .ea-form-grid { grid-template-columns: 1fr; }
+      .input-action { grid-template-columns: 1fr; }
+      .list-toolbar { grid-template-columns: 1fr; }
+      .bulk-preview-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>EA 账号列表</h1>
+      <div class="meta">独立管理 EA 账号、Token、已分配/未分配筛选</div>
+    </div>
+    <nav class="toolbar">
+      <a href="/admin">管理控制台</a>
+      <a href="/dashboard">监控大屏</a>
+      <a href="/manual-trades">人工建仓管理</a>
+      <a href="/users">用户列表</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>鉴权</h2>
+      <div class="grid" style="grid-template-columns: 1fr 1fr 1fr auto;">
+        <input id="loginUsername" class="input" placeholder="管理员用户名（可选）" />
+        <input id="loginPassword" class="input" type="password" placeholder="密码（可选）" />
+        <input id="adminToken" class="input" type="password" placeholder="X-Admin-Token，例如 admin123456" />
+        <button id="loginBtn" class="button" type="button">登录/保存</button>
+      </div>
+      <div id="msg" class="message" style="margin-top: 10px;"></div>
+      <div class="meta" style="margin-top: 8px;">优先使用已登录 JWT；没有 JWT 时使用静态 X-Admin-Token。添加 EA 和生成 Token 需要 admin 权限。</div>
+    </section>
+
+    <section class="panel admin-only">
+      <h2>添加 EA 账号</h2>
+      <div class="ea-form-grid">
+        <div class="input-action">
+          <input id="eaId" class="input" placeholder="EA ID，例如 mt5-100200300-icmarkets-main" />
+          <button id="generateEaIdBtn" class="button secondary" type="button" style="width:auto;">自动生成</button>
+        </div>
+        <input id="eaAccount" class="input" placeholder="交易账号（可选）" />
+        <input id="eaBroker" class="input" placeholder="Broker（可选）" />
+        <select id="eaTerminal" class="select">
+          <option value="MT5">MT5</option>
+          <option value="MT4">MT4</option>
+        </select>
+        <input id="eaStrategy" class="input" placeholder="策略名（可选）" />
+        <input id="eaVersion" class="input" placeholder="版本（可选）" />
+        <input id="eaApiToken" class="input" type="password" placeholder="EA 专属 API Token（可选，至少 8 位）" />
+        <button id="createEaBtn" class="button" type="button">添加 / 更新 EA</button>
+      </div>
+      <div class="meta">EA ID 必须唯一，建议格式：mt5-交易账号-broker-策略。EA 端上线后也会自动注册；生产环境建议给每个 EA 设置专属 Token，避免共用全局 Token。</div>
+    </section>
+
+    <section class="panel wide">
+      <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+        <h2 style="margin: 0;">EA 账号列表</h2>
+        <div class="list-toolbar">
+          <input id="eaSearch" class="input" placeholder="搜索 EA / 账号 / Broker" />
+          <select id="assignmentFilter" class="select">
+            <option value="all">全部</option>
+            <option value="assigned">已分配</option>
+            <option value="unassigned">未分配</option>
+          </select>
+          <select id="statusFilter" class="select">
+            <option value="all">全部状态</option>
+            <option value="online">在线</option>
+            <option value="offline">离线</option>
+            <option value="paused">暂停交易</option>
+          </select>
+          <select id="tokenFilter" class="select">
+            <option value="all">全部Token</option>
+            <option value="token_set">已设置Token</option>
+            <option value="token_missing">未设置Token</option>
+          </select>
+          <select id="pageSizeSelect" class="select">
+            <option value="10">每页 10</option>
+            <option value="20" selected>每页 20</option>
+            <option value="50">每页 50</option>
+          </select>
+          <button id="prevPageBtn" class="button secondary" type="button" style="width:auto;">上一页</button>
+          <span id="pageInfo" class="meta">第 1 / 1 页</span>
+          <button id="nextPageBtn" class="button secondary" type="button" style="width:auto;">下一页</button>
+          <span id="selectedCount" class="meta">已选择 0 个 EA</span>
+          <button id="bulkAssignBtn" class="button" type="button" style="width:auto;">分配已选EA</button>
+          <button id="exportCsvBtn" class="button secondary" type="button" style="width:auto;">导出 CSV</button>
+          <button id="clearEaFiltersBtn" class="button secondary" type="button" style="width:auto;">清空筛选</button>
+          <button id="refreshBtn" class="button secondary" type="button" style="width:auto;">刷新</button>
+        </div>
+      </div>
+      <div id="bulkAssignPanel" class="panel hidden" style="margin-bottom: 12px; background: rgba(23, 34, 58, 0.72);">
+        <h2>批量分配已选 EA</h2>
+        <div class="toolbar">
+          <select id="bulkAssignUser" class="select" style="width: 260px;"></select>
+          <label class="meta"><input id="bulkCanView" type="checkbox" checked /> 可查看</label>
+          <label class="meta"><input id="bulkCanTrade" type="checkbox" /> 可交易</label>
+          <label class="meta"><input id="bulkPrimaryOperator" type="checkbox" /> 主操作者</label>
+          <button id="confirmBulkAssignBtn" class="button" type="button" style="width:auto;">确认分配</button>
+          <button id="cancelBulkAssignBtn" class="button secondary" type="button" style="width:auto;">取消</button>
+        </div>
+        <div class="bulk-preview-grid">
+          <div class="preview-box">
+            <div class="preview-title">本次将分配的 EA</div>
+            <div id="bulkSelectedEaList" class="preview-list"></div>
+          </div>
+          <div class="preview-box">
+            <div class="preview-title">目标用户当前权限</div>
+            <div id="bulkExistingAssignments" class="preview-list"></div>
+          </div>
+        </div>
+        <div class="meta" style="margin-top: 8px;">批量分配采用部分成功策略：成功的会保存，失败的会单独提示。</div>
+      </div>
+      <div id="eaTable"></div>
+    </section>
+
+  </main>
+
+  <div id="tokenModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="tokenModalTitle">
+    <div class="modal">
+      <h2 id="tokenModalTitle">生成 EA Token</h2>
+      <div id="tokenModalMessage" class="meta">新 Token 生成后，旧 Token 会立即失效。</div>
+      <textarea id="tokenOutput" class="token-output hidden" readonly></textarea>
+      <div class="toolbar" style="justify-content:flex-end;margin-top:14px;">
+        <button id="tokenModalCancelBtn" class="button secondary" type="button" style="width:auto;">取消</button>
+        <button id="tokenCopyBtn" class="button secondary hidden" type="button" style="width:auto;">复制 Token</button>
+        <button id="tokenConfirmBtn" class="button" type="button" style="width:auto;">确认生成</button>
+        <button id="tokenCloseBtn" class="button hidden" type="button" style="width:auto;">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const els = {
+      msg: document.getElementById("msg"),
+      loginUsername: document.getElementById("loginUsername"),
+      loginPassword: document.getElementById("loginPassword"),
+      adminToken: document.getElementById("adminToken"),
+      eaId: document.getElementById("eaId"),
+      generateEaIdBtn: document.getElementById("generateEaIdBtn"),
+      eaAccount: document.getElementById("eaAccount"),
+      eaBroker: document.getElementById("eaBroker"),
+      eaTerminal: document.getElementById("eaTerminal"),
+      eaStrategy: document.getElementById("eaStrategy"),
+      eaVersion: document.getElementById("eaVersion"),
+      eaApiToken: document.getElementById("eaApiToken"),
+      eaSearch: document.getElementById("eaSearch"),
+      assignmentFilter: document.getElementById("assignmentFilter"),
+      statusFilter: document.getElementById("statusFilter"),
+      tokenFilter: document.getElementById("tokenFilter"),
+      pageSizeSelect: document.getElementById("pageSizeSelect"),
+      prevPageBtn: document.getElementById("prevPageBtn"),
+      pageInfo: document.getElementById("pageInfo"),
+      nextPageBtn: document.getElementById("nextPageBtn"),
+      selectedCount: document.getElementById("selectedCount"),
+      bulkAssignBtn: document.getElementById("bulkAssignBtn"),
+      exportCsvBtn: document.getElementById("exportCsvBtn"),
+      clearEaFiltersBtn: document.getElementById("clearEaFiltersBtn"),
+      bulkAssignPanel: document.getElementById("bulkAssignPanel"),
+      bulkAssignUser: document.getElementById("bulkAssignUser"),
+      bulkCanView: document.getElementById("bulkCanView"),
+      bulkCanTrade: document.getElementById("bulkCanTrade"),
+      bulkPrimaryOperator: document.getElementById("bulkPrimaryOperator"),
+      bulkSelectedEaList: document.getElementById("bulkSelectedEaList"),
+      bulkExistingAssignments: document.getElementById("bulkExistingAssignments"),
+      confirmBulkAssignBtn: document.getElementById("confirmBulkAssignBtn"),
+      cancelBulkAssignBtn: document.getElementById("cancelBulkAssignBtn"),
+      eaTable: document.getElementById("eaTable"),
+      tokenModal: document.getElementById("tokenModal"),
+      tokenModalTitle: document.getElementById("tokenModalTitle"),
+      tokenModalMessage: document.getElementById("tokenModalMessage"),
+      tokenOutput: document.getElementById("tokenOutput"),
+      tokenModalCancelBtn: document.getElementById("tokenModalCancelBtn"),
+      tokenCopyBtn: document.getElementById("tokenCopyBtn"),
+      tokenConfirmBtn: document.getElementById("tokenConfirmBtn"),
+      tokenCloseBtn: document.getElementById("tokenCloseBtn"),
+    };
+    let eas = [];
+    let assignments = [];
+    let users = [];
+    const selectedEaIds = new Set();
+    let principal = { username: "", role: "admin" };
+    let initialEaFilterApplied = false;
+    let currentPage = 1;
+    let pendingTokenEaId = "";
+
+    function show(text, type = "ok") {
+      els.msg.textContent = text;
+      els.msg.className = "message show " + type;
+    }
+    function clearMsg() {
+      els.msg.className = "message";
+      els.msg.textContent = "";
+    }
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+    function apiErrorMessage(text, statusCode) {
+      if (!text) return `请求失败：${statusCode}`;
+      try {
+        const parsed = JSON.parse(text);
+        const detail = parsed.detail;
+        if (typeof detail === "string") return detail;
+        if (Array.isArray(detail)) {
+          return detail.map((item) => {
+            const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+            return [location, item.msg].filter(Boolean).join("：");
+          }).join("；");
+        }
+        if (detail) return JSON.stringify(detail);
+      } catch {
+        // Non-JSON response; show the original text.
+      }
+      return text;
+    }
+    function apiErrorDetail(error) {
+      return apiErrorMessage(error?.message || String(error), "未知");
+    }
+    function getJwt() {
+      return (localStorage.getItem("ea-admin-jwt") || "").trim();
+    }
+    function getToken() {
+      return (localStorage.getItem("ea-admin-token") || "").trim() || els.adminToken.value.trim();
+    }
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      const jwt = getJwt();
+      const legacy = getToken();
+      if (jwt) headers.Authorization = "Bearer " + jwt;
+      else if (legacy) headers["X-Admin-Token"] = legacy;
+      else throw new Error("请先登录或填写 X-Admin-Token。");
+
+      const res = await fetch(path, { ...options, headers });
+      const text = await res.text();
+      if (!res.ok) throw new Error(apiErrorMessage(text, res.status));
+      return text ? JSON.parse(text) : null;
+    }
+    async function loadPrincipal() {
+      const jwt = getJwt();
+      if (!jwt) {
+        principal = { username: "legacy-token", role: getToken() ? "admin" : "viewer" };
+        return principal;
+      }
+      principal = await api("/api/auth/me");
+      return principal;
+    }
+    function isAdmin() {
+      return principal.role === "admin";
+    }
+    function applyRoleUi() {
+      document.querySelectorAll(".admin-only").forEach((el) => {
+        el.classList.toggle("hidden", !isAdmin());
+      });
+      els.bulkAssignBtn.classList.toggle("hidden", !isAdmin());
+      els.selectedCount.classList.toggle("hidden", !isAdmin());
+    }
+    async function loginOrSave() {
+      clearMsg();
+      const username = els.loginUsername.value.trim();
+      const password = els.loginPassword.value;
+      if (username && password) {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const text = await res.text();
+        if (!res.ok) throw new Error(apiErrorMessage(text, res.status));
+        const data = JSON.parse(text);
+        localStorage.setItem("ea-admin-jwt", data.access_token);
+        localStorage.setItem("ea-admin-user", `${data.user.username}（${data.user.role}）`);
+        els.loginPassword.value = "";
+        show("JWT 登录成功。");
+      } else {
+        localStorage.setItem("ea-admin-token", els.adminToken.value.trim());
+        show("Token 已保存。");
+      }
+      await loadAll();
+    }
+    function matches(value, query) {
+      return String(value ?? "").toLowerCase().includes(query);
+    }
+    function slugPart(value, fallback = "") {
+      const text = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      return text || fallback;
+    }
+    function compactTimestamp() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    }
+    function normalizeEaId(value) {
+      return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9._:-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^[^a-z0-9]+/, "")
+        .slice(0, 128);
+    }
+    function isValidEaId(value) {
+      return /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/.test(value);
+    }
+    function generateEaId() {
+      const terminal = slugPart(els.eaTerminal.value, "mt5");
+      const account = slugPart(els.eaAccount.value, `manual-${compactTimestamp()}`);
+      const broker = slugPart(els.eaBroker.value);
+      const strategy = slugPart(els.eaStrategy.value, "main");
+      const parts = [terminal, account, broker, strategy].filter(Boolean);
+      els.eaId.value = normalizeEaId(parts.join("-"));
+      show(`已生成 EA ID：${els.eaId.value}`);
+    }
+    function initialEaFromUrl() {
+      return new URLSearchParams(window.location.search).get("ea") || "";
+    }
+    function applyInitialEaFilter() {
+      const eaId = initialEaFromUrl();
+      if (initialEaFilterApplied || !eaId) return;
+      initialEaFilterApplied = true;
+      els.eaSearch.value = eaId;
+      els.assignmentFilter.value = "all";
+      els.statusFilter.value = "all";
+      els.tokenFilter.value = "all";
+      show(`已自动筛选 EA：${eaId}`);
+      setTimeout(() => els.eaTable.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    }
+    function clearEaFilters() {
+      els.eaSearch.value = "";
+      els.assignmentFilter.value = "all";
+      els.statusFilter.value = "all";
+      els.tokenFilter.value = "all";
+      currentPage = 1;
+      history.replaceState(null, "", window.location.pathname);
+      renderEas();
+      show("EA 筛选已清空。");
+    }
+    function assignmentDetailsForEa(eaId) {
+      const rows = assignments.filter((a) => a.ea_id === eaId);
+      if (!rows.length) return "";
+      const primary = rows.filter((a) => a.is_primary_operator).map((a) => a.username);
+      const traders = rows.filter((a) => a.can_trade && !a.is_primary_operator).map((a) => a.username);
+      const viewers = rows.filter((a) => a.can_view && !a.can_trade && !a.is_primary_operator).map((a) => a.username);
+      const userBadge = (username) => `<a class="badge" href="/users?user=${encodeURIComponent(username)}" title="查看 ${escapeHtml(username)} 的 EA 分配">${escapeHtml(username)}</a>`;
+      const group = (label, names) => names.length ? `<div>${escapeHtml(label)}：${names.map((u) => userBadge(u)).join("")}</div>` : "";
+      return [
+        group("主操作者", primary),
+        group("可交易", traders),
+        group("只读", viewers),
+      ].join("") || '<span class="meta">未分配</span>';
+    }
+    function shortAssignedUsers(ea) {
+      if (isAdmin() && assignments.length) return assignmentDetailsForEa(ea.ea_id);
+      return (ea.assigned_users || [])
+        .map((u) => `<a class="badge" href="/users?user=${encodeURIComponent(u)}" title="查看 ${escapeHtml(u)} 的 EA 分配">${escapeHtml(u)}</a>`)
+        .join("") || '<span class="meta">未分配</span>';
+    }
+    function visibleEas() {
+      const q = (els.eaSearch.value || "").trim().toLowerCase();
+      const assignmentFilter = els.assignmentFilter.value;
+      const statusFilter = els.statusFilter.value;
+      const tokenFilter = els.tokenFilter.value;
+      return eas.filter((ea) => {
+        const assigned = Array.isArray(ea.assigned_users) && ea.assigned_users.length > 0;
+        if (assignmentFilter === "assigned" && !assigned) return false;
+        if (assignmentFilter === "unassigned" && assigned) return false;
+        if (statusFilter === "online" && ea.status !== "online") return false;
+        if (statusFilter === "offline" && ea.status !== "offline") return false;
+        if (statusFilter === "paused" && ea.allow_trading !== false) return false;
+        if (tokenFilter === "token_set" && !ea.has_ea_token) return false;
+        if (tokenFilter === "token_missing" && ea.has_ea_token) return false;
+        return !q || [ea.ea_id, ea.account_number, ea.broker].some((v) => matches(v, q));
+      });
+    }
+    function pageSize() {
+      return Number(els.pageSizeSelect.value) || 20;
+    }
+    function pagedEas(rows) {
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize()));
+      currentPage = Math.min(Math.max(1, currentPage), totalPages);
+      const start = (currentPage - 1) * pageSize();
+      return rows.slice(start, start + pageSize());
+    }
+    function updatePagination(rows) {
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize()));
+      els.pageInfo.textContent = `第 ${currentPage} / ${totalPages} 页（共 ${rows.length} 个）`;
+      els.prevPageBtn.disabled = currentPage <= 1;
+      els.nextPageBtn.disabled = currentPage >= totalPages;
+    }
+    function updateSelectionUi() {
+      selectedEaIds.forEach((eaId) => {
+        if (!eas.some((ea) => ea.ea_id === eaId)) selectedEaIds.delete(eaId);
+      });
+      els.selectedCount.textContent = `已选择 ${selectedEaIds.size} 个 EA`;
+      els.bulkAssignBtn.disabled = selectedEaIds.size === 0;
+      if (!els.bulkAssignPanel.classList.contains("hidden")) renderBulkAssignPreview();
+    }
+    function renderBulkUserOptions() {
+      els.bulkAssignUser.innerHTML = users
+        .filter((u) => u.is_active)
+        .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.username)}（${escapeHtml(u.role)}）</option>`)
+        .join("");
+    }
+    function selectedEaRows() {
+      return [...selectedEaIds]
+        .map((eaId) => findEa(eaId))
+        .filter((ea) => ea.ea_id)
+        .sort((a, b) => String(a.ea_id).localeCompare(String(b.ea_id)));
+    }
+    function permissionText(row) {
+      if (!row) return "未分配";
+      const parts = [];
+      if (row.can_view) parts.push("可查看");
+      if (row.can_trade) parts.push("可交易");
+      if (row.is_primary_operator) parts.push("主操作者");
+      return parts.join(" / ") || "无权限";
+    }
+    function primaryOperatorForEa(eaId) {
+      return assignments.find((a) => a.ea_id === eaId && a.is_primary_operator);
+    }
+    function renderBulkAssignPreview() {
+      const selectedRows = selectedEaRows();
+      const username = els.bulkAssignUser.value;
+      els.bulkSelectedEaList.innerHTML = selectedRows.length
+        ? selectedRows.map((ea) => `
+            <div class="preview-item">
+              <code>${escapeHtml(ea.ea_id)}</code>
+              <div class="meta">账号：${escapeHtml(ea.account_number || "-")}；Broker：${escapeHtml(ea.broker || "-")}</div>
+              <div>${assignmentDetailsForEa(ea.ea_id) || '<span class="meta">当前未分配</span>'}</div>
+            </div>
+          `).join("")
+        : '<div class="meta">请先勾选 EA。</div>';
+
+      els.bulkExistingAssignments.innerHTML = username && selectedRows.length
+        ? selectedRows.map((ea) => {
+            const existing = assignments.find((a) => a.ea_id === ea.ea_id && a.username === username);
+            const primary = primaryOperatorForEa(ea.ea_id);
+            const primaryNote = primary && primary.username !== username
+              ? `<div class="meta">当前主操作者：${escapeHtml(primary.username)}，勾选“主操作者”会冲突。</div>`
+              : "";
+            return `
+              <div class="preview-item">
+                <code>${escapeHtml(ea.ea_id)}</code>：${escapeHtml(permissionText(existing))}
+                ${primaryNote}
+              </div>
+            `;
+          }).join("")
+        : '<div class="meta">请选择目标用户。</div>';
+    }
+    function statusBadge(status) {
+      const value = status || "-";
+      const cls = value === "online" ? "online" : (value === "offline" ? "offline" : "manual");
+      return `<span class="badge ${cls}">${escapeHtml(value)}</span>`;
+    }
+    function renderEas() {
+      const list = visibleEas();
+      const pageRows = pagedEas(list);
+      updatePagination(list);
+      if (!list.length) {
+        els.eaTable.innerHTML = '<div class="empty">暂无 EA 账号。可先添加，或等待 EA 端上报心跳。</div>';
+        updateSelectionUi();
+        return;
+      }
+      els.eaTable.innerHTML = `
+        <table>
+          <thead><tr><th>${isAdmin() ? '<input id="selectAllVisibleEa" class="ea-check" type="checkbox" />' : ""}</th><th>EA ID</th><th>交易账号</th><th>Broker</th><th>状态</th><th>Token</th><th>分配详情</th><th>操作</th></tr></thead>
+          <tbody>
+            ${pageRows.map((ea) => `
+              <tr>
+                <td>${isAdmin() ? `<input class="ea-check" type="checkbox" data-ea-select="${escapeHtml(ea.ea_id)}" ${selectedEaIds.has(ea.ea_id) ? "checked" : ""} />` : ""}</td>
+                <td><a href="/ea-detail?ea=${encodeURIComponent(ea.ea_id)}"><code>${escapeHtml(ea.ea_id)}</code></a></td>
+                <td>${isAdmin() ? `<input class="table-input" data-ea-account="${escapeHtml(ea.ea_id)}" value="${escapeHtml(ea.account_number || "")}" placeholder="账号" />` : escapeHtml(ea.account_number || "-")}</td>
+                <td>${isAdmin() ? `<input class="table-input" data-ea-broker="${escapeHtml(ea.ea_id)}" value="${escapeHtml(ea.broker || "")}" placeholder="Broker" />` : escapeHtml(ea.broker || "-")}</td>
+                <td>${statusBadge(ea.status)}</td>
+                <td>${ea.has_ea_token ? '<span class="badge">已设置</span>' : '<span class="meta">未设置</span>'}</td>
+                <td>${shortAssignedUsers(ea)}</td>
+                <td>${isAdmin() ? `
+                  <div class="toolbar">
+                    <button class="button secondary" style="width:auto;padding:6px 10px;" data-save-ea="${escapeHtml(ea.ea_id)}" type="button">保存</button>
+                    <button class="button secondary" style="width:auto;padding:6px 10px;" data-rotate-token="${escapeHtml(ea.ea_id)}" type="button">生成Token</button>
+                  </div>` : '<span class="meta">只读</span>'}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>`;
+      const selectAll = document.getElementById("selectAllVisibleEa");
+      if (selectAll) {
+        const visibleIds = pageRows.map((ea) => ea.ea_id);
+        const selectedVisible = visibleIds.filter((eaId) => selectedEaIds.has(eaId));
+        selectAll.checked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
+        selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
+      }
+      updateSelectionUi();
+    }
+    async function loadAll() {
+      clearMsg();
+      await loadPrincipal();
+      applyRoleUi();
+      eas = await api("/api/admin/eas");
+      if (isAdmin()) {
+        [assignments, users] = await Promise.all([
+          api("/api/admin/assignments"),
+          api("/api/admin/users"),
+        ]);
+        renderBulkUserOptions();
+      } else {
+        assignments = [];
+        users = [];
+      }
+      applyInitialEaFilter();
+      renderEas();
+    }
+    async function createEa() {
+      const payload = {
+        ea_id: els.eaId.value.trim(),
+        account_number: els.eaAccount.value.trim() || null,
+        broker: els.eaBroker.value.trim() || null,
+        terminal: els.eaTerminal.value,
+        strategy_name: els.eaStrategy.value.trim() || null,
+        version: els.eaVersion.value.trim() || null,
+        status: "manual",
+        allow_trading: true,
+      };
+      const apiToken = els.eaApiToken.value.trim();
+      if (apiToken) payload.api_token = apiToken;
+      if (!payload.ea_id) throw new Error("请填写 EA ID。");
+      payload.ea_id = normalizeEaId(payload.ea_id);
+      els.eaId.value = payload.ea_id;
+      if (!isValidEaId(payload.ea_id)) {
+        throw new Error("EA ID 格式不正确：请使用 3-128 位英文、数字、点、下划线、中横线或冒号。");
+      }
+      await api("/api/admin/eas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      els.eaApiToken.value = "";
+      await loadAll();
+      show(`EA 账号 ${payload.ea_id} 已添加/更新。`);
+    }
+    function findEa(eaId) {
+      return eas.find((ea) => ea.ea_id === eaId) || {};
+    }
+    function tableValue(selector, eaId) {
+      return document.querySelector(`[${selector}="${CSS.escape(String(eaId))}"]`)?.value?.trim() || "";
+    }
+    async function saveEaFromRow(eaId) {
+      const original = findEa(eaId);
+      const payload = {
+        ea_id: eaId,
+        account_number: tableValue("data-ea-account", eaId) || null,
+        broker: tableValue("data-ea-broker", eaId) || null,
+        terminal: original.terminal || "MT5",
+        strategy_name: original.strategy_name || null,
+        version: original.version || null,
+        status: original.status || "manual",
+        allow_trading: original.allow_trading !== false,
+      };
+      await api("/api/admin/eas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await loadAll();
+      show(`EA ${eaId} 已保存。`);
+    }
+    function openTokenModal(eaId) {
+      pendingTokenEaId = eaId;
+      els.tokenModalTitle.textContent = `为 ${eaId} 生成 EA Token`;
+      els.tokenModalMessage.textContent = "新 Token 生成后，旧 Token 会立即失效。Token 只显示一次，请生成后立即复制并填入对应 EA 参数。";
+      els.tokenOutput.value = "";
+      els.tokenOutput.classList.add("hidden");
+      els.tokenCopyBtn.classList.add("hidden");
+      els.tokenCloseBtn.classList.add("hidden");
+      els.tokenModalCancelBtn.classList.remove("hidden");
+      els.tokenConfirmBtn.classList.remove("hidden");
+      els.tokenConfirmBtn.disabled = false;
+      els.tokenModal.classList.add("show");
+    }
+    function closeTokenModal() {
+      pendingTokenEaId = "";
+      els.tokenModal.classList.remove("show");
+    }
+    async function confirmTokenRotation() {
+      if (!pendingTokenEaId) return;
+      els.tokenConfirmBtn.disabled = true;
+      const eaId = pendingTokenEaId;
+      const result = await api(`/api/admin/eas/${encodeURIComponent(eaId)}/token`, { method: "POST" });
+      els.tokenModalMessage.textContent = "Token 已生成。请立即复制并更新到对应 EA；关闭后无法再次查看明文。";
+      els.tokenOutput.value = result.api_token;
+      els.tokenOutput.classList.remove("hidden");
+      els.tokenCopyBtn.classList.remove("hidden");
+      els.tokenCloseBtn.classList.remove("hidden");
+      els.tokenModalCancelBtn.classList.add("hidden");
+      els.tokenConfirmBtn.classList.add("hidden");
+      await loadAll();
+      show(`已为 ${eaId} 生成新的 EA Token。旧 Token 已失效，请完成 EA 端参数更新。`);
+    }
+    async function copyGeneratedToken() {
+      await navigator.clipboard.writeText(els.tokenOutput.value);
+      show("EA Token 已复制。请立即粘贴到对应 EA 参数中。");
+    }
+    function csvCell(value) {
+      const text = String(value ?? "");
+      return `"${text.replaceAll('"', '""')}"`;
+    }
+    function assignmentSummaryForEa(eaId) {
+      const rows = assignments.filter((a) => a.ea_id === eaId);
+      if (!rows.length) return "未分配";
+      return rows
+        .map((row) => `${row.username}（${permissionText(row)}）`)
+        .join("；");
+    }
+    function exportEasCsv() {
+      const rows = visibleEas();
+      if (!rows.length) {
+        show("当前筛选结果为空，无需导出。", "err");
+        return;
+      }
+      const header = ["EA ID", "交易账号", "Broker", "终端", "状态", "允许交易", "Token状态", "分配详情", "最后心跳", "更新时间"];
+      const lines = [
+        header.map(csvCell).join(","),
+        ...rows.map((ea) => [
+          ea.ea_id,
+          ea.account_number,
+          ea.broker,
+          ea.terminal,
+          ea.status,
+          ea.allow_trading === false ? "否" : "是",
+          ea.has_ea_token ? "已设置" : "未设置",
+          isAdmin() ? assignmentSummaryForEa(ea.ea_id) : (ea.assigned_users || []).join("；"),
+          ea.last_seen_at,
+          ea.updated_at,
+        ].map(csvCell).join(",")),
+      ];
+      const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      link.href = url;
+      link.download = `ea-accounts-${stamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      show(`已导出 ${rows.length} 个 EA 账号。`);
+    }
+    async function openBulkAssignPanel() {
+      if (!selectedEaIds.size) {
+        show("请先选择至少一个 EA。", "err");
+        return;
+      }
+      if (!users.length) users = await api("/api/admin/users");
+      renderBulkUserOptions();
+      if (!els.bulkAssignUser.value) {
+        show("暂无可用用户，请先到用户列表创建用户。", "err");
+        return;
+      }
+      renderBulkAssignPreview();
+      els.bulkAssignPanel.classList.remove("hidden");
+    }
+    async function confirmBulkAssign() {
+      const username = els.bulkAssignUser.value;
+      if (!username) throw new Error("请选择用户。");
+      const eaIds = [...selectedEaIds];
+      if (!eaIds.length) throw new Error("请先选择至少一个 EA。");
+      const payloads = eaIds.map((eaId) => ({
+        username,
+        ea_id: eaId,
+        can_view: els.bulkCanView.checked,
+        can_trade: els.bulkCanTrade.checked,
+        is_primary_operator: els.bulkPrimaryOperator.checked,
+      }));
+      const results = await Promise.allSettled(payloads.map((payload) =>
+        api("/api/admin/assignments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).then(() => payload)
+      ));
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      const failedRows = results
+        .map((result, index) => ({ result, eaId: payloads[index].ea_id }))
+        .filter((row) => row.result.status === "rejected")
+        .map((row) => `${row.eaId}: ${apiErrorDetail(row.result.reason)}`);
+      const failed = failedRows.length;
+      selectedEaIds.clear();
+      els.bulkAssignPanel.classList.add("hidden");
+      await loadAll();
+      show(
+        failed
+          ? `批量分配完成：成功 ${ok} 个，失败 ${failed} 个。请根据失败原因调整权限后重试：${failedRows.slice(0, 3).join("；")}${failedRows.length > 3 ? "；..." : ""}`
+          : `已成功分配 ${ok} 个 EA 给 ${username}。当前权限：${permissionText({ can_view: els.bulkCanView.checked, can_trade: els.bulkCanTrade.checked, is_primary_operator: els.bulkPrimaryOperator.checked })}。`,
+        failed ? "err" : "ok"
+      );
+    }
+    function bind(id, handler) {
+      document.getElementById(id).addEventListener("click", async () => {
+        try {
+          await handler();
+        } catch (error) {
+          show(error.message || String(error), "err");
+        }
+      });
+    }
+
+    bind("loginBtn", loginOrSave);
+    bind("createEaBtn", createEa);
+    bind("generateEaIdBtn", generateEaId);
+    bind("bulkAssignBtn", openBulkAssignPanel);
+    bind("confirmBulkAssignBtn", confirmBulkAssign);
+    bind("exportCsvBtn", exportEasCsv);
+    bind("clearEaFiltersBtn", clearEaFilters);
+    bind("tokenConfirmBtn", confirmTokenRotation);
+    bind("tokenCopyBtn", copyGeneratedToken);
+    els.tokenModalCancelBtn.addEventListener("click", closeTokenModal);
+    els.tokenCloseBtn.addEventListener("click", closeTokenModal);
+    els.tokenModal.addEventListener("click", (event) => {
+      if (event.target === els.tokenModal) closeTokenModal();
+    });
+    document.getElementById("cancelBulkAssignBtn").addEventListener("click", () => {
+      els.bulkAssignPanel.classList.add("hidden");
+    });
+    els.bulkAssignUser.addEventListener("change", renderBulkAssignPreview);
+    bind("refreshBtn", loadAll);
+    function resetPageAndRenderEas() {
+      currentPage = 1;
+      renderEas();
+    }
+    els.eaSearch.addEventListener("input", resetPageAndRenderEas);
+    els.assignmentFilter.addEventListener("change", resetPageAndRenderEas);
+    els.statusFilter.addEventListener("change", resetPageAndRenderEas);
+    els.tokenFilter.addEventListener("change", resetPageAndRenderEas);
+    els.pageSizeSelect.addEventListener("change", resetPageAndRenderEas);
+    els.prevPageBtn.addEventListener("click", () => {
+      currentPage -= 1;
+      renderEas();
+    });
+    els.nextPageBtn.addEventListener("click", () => {
+      currentPage += 1;
+      renderEas();
+    });
+    els.eaTable.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const saveButton = target.closest("[data-save-ea]");
+      if (saveButton) {
+        try {
+          await saveEaFromRow(saveButton.dataset.saveEa);
+        } catch (error) {
+          show(error.message || String(error), "err");
+        }
+        return;
+      }
+      const button = target.closest("[data-rotate-token]");
+      if (!button) return;
+      openTokenModal(button.dataset.rotateToken);
+    });
+    els.eaTable.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      if (target.id === "selectAllVisibleEa") {
+        const visibleIds = pagedEas(visibleEas()).map((ea) => ea.ea_id);
+        if (target.checked) visibleIds.forEach((eaId) => selectedEaIds.add(eaId));
+        else visibleIds.forEach((eaId) => selectedEaIds.delete(eaId));
+        renderEas();
+        return;
+      }
+      const eaId = target.dataset.eaSelect;
+      if (!eaId) return;
+      if (target.checked) selectedEaIds.add(eaId);
+      else selectedEaIds.delete(eaId);
+      updateSelectionUi();
+    });
+
+    els.adminToken.value = localStorage.getItem("ea-admin-token") || "";
+    loadAll().catch((error) => show(error.message || String(error), "err"));
+  </script>
+</body>
+</html>

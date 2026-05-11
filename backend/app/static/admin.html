@@ -1,0 +1,2181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EA 中央控制系统管理后台</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --panel: #121a2b;
+      --panel-alt: #172036;
+      --border: #26324d;
+      --text: #e5ecff;
+      --muted: #94a3c7;
+      --ok: #16a34a;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --accent: #60a5fa;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar,
+    .content {
+      padding: 20px;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, #10182a 0%, #0d1524 100%);
+    }
+
+    .content {
+      display: grid;
+      gap: 16px;
+      background: #0a1020;
+      align-content: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .toolbar,
+    .row,
+    .grid-2 {
+      display: grid;
+      gap: 10px;
+    }
+
+    .toolbar {
+      grid-template-columns: 1fr auto auto;
+      margin-bottom: 16px;
+    }
+
+    .row {
+      grid-template-columns: 1fr;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .input,
+    .select,
+    .textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .textarea {
+      min-height: 150px;
+      resize: vertical;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      background: #334155;
+      color: var(--text);
+    }
+
+    .button.primary {
+      background: var(--accent);
+      color: #081120;
+      font-weight: bold;
+    }
+
+    .button.ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+    }
+
+    .button.warn {
+      background: #7c2d12;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .ea-list {
+      display: grid;
+      gap: 10px;
+      max-height: calc(100vh - 240px);
+      overflow: auto;
+    }
+
+    .ea-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(23, 32, 54, 0.75);
+      cursor: pointer;
+    }
+
+    .ea-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.45);
+    }
+
+    .ea-card strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 72px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge.online,
+    .badge.success {
+      background: rgba(22, 163, 74, 0.2);
+      color: #86efac;
+    }
+
+    .badge.offline,
+    .badge.failed,
+    .badge.cancelled,
+    .badge.timeout {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+
+    .badge.pending,
+    .badge.received,
+    .badge.executing {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+    }
+
+    .badge.watch {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+    }
+
+    .badge.paused {
+      background: rgba(59, 130, 246, 0.18);
+      color: #bfdbfe;
+    }
+
+    .badge.normal {
+      background: rgba(148, 163, 184, 0.2);
+      color: #cbd5e1;
+    }
+
+    .tables {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 640px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #18233c;
+      z-index: 1;
+    }
+
+    code,
+    pre {
+      font-family: Consolas, monospace;
+      font-size: 12px;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .empty {
+      padding: 24px;
+      color: var(--muted);
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .global-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .risk-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    .risk-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .risk-item {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(23, 32, 54, 0.65);
+    }
+
+    .risk-item strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .quick-link-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .quick-link {
+      display: block;
+      min-height: 110px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      color: var(--text);
+      text-decoration: none;
+      background: rgba(23, 32, 54, 0.65);
+    }
+
+    .quick-link strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--accent);
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .config-note-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .config-note {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(23, 32, 54, 0.5);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .check-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .check-item {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(23, 32, 54, 0.65);
+    }
+
+    .check-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .hidden-legacy {
+      display: none;
+    }
+
+    .command-panel {
+      position: sticky;
+      top: 16px;
+    }
+
+    .summary-item {
+      display: block;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    a.summary-item:hover,
+    .summary-item.clickable:hover {
+      border-color: rgba(96, 165, 250, 0.75);
+      box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.25);
+    }
+
+    .summary-item .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .summary-item .value {
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .mini-item {
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+    }
+
+    .mini-item .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .mini-item .value {
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+    }
+
+    .timeline-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(23, 32, 54, 0.65);
+    }
+
+    .timeline-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .timeline-title {
+      font-weight: bold;
+    }
+
+    .flow {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .flow-step {
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .flow-step.done {
+      border-color: rgba(22, 163, 74, 0.35);
+      color: #86efac;
+      background: rgba(22, 163, 74, 0.14);
+    }
+
+    .flow-step.active {
+      border-color: rgba(96, 165, 250, 0.45);
+      color: #bfdbfe;
+      background: rgba(96, 165, 250, 0.16);
+    }
+
+    .activity-feed {
+      display: grid;
+      gap: 10px;
+    }
+
+    .activity-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(23, 32, 54, 0.55);
+    }
+
+    .activity-item.info {
+      border-color: rgba(96, 165, 250, 0.25);
+    }
+
+    .activity-item.warn {
+      border-color: rgba(245, 158, 11, 0.25);
+    }
+
+    .activity-item.error {
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .activity-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .message {
+      margin-top: 10px;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .message.show {
+      display: block;
+    }
+
+    .message.ok {
+      background: rgba(22, 163, 74, 0.18);
+      color: #bbf7d0;
+    }
+
+    .message.error {
+      background: rgba(239, 68, 68, 0.18);
+      color: #fecaca;
+    }
+
+    .message.info {
+      background: rgba(96, 165, 250, 0.18);
+      color: #bfdbfe;
+    }
+
+    .message.warn {
+      background: rgba(245, 158, 11, 0.18);
+      color: #fde68a;
+    }
+
+    .field-help {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 1200px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+
+      .tables,
+      .grid-2,
+      .summary-grid,
+      .global-grid,
+      .risk-grid,
+      .config-grid,
+      .quick-link-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .command-panel {
+        position: static;
+      }
+
+      .ea-list {
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>EA 中央控制系统</h2>
+        <p class="meta">全局情况页：只看系统健康、风险轮廓和关键入口。</p>
+        <p class="meta" style="margin-bottom: 10px;"><a href="/dashboard" style="color: var(--accent); font-weight: bold;">监控大屏</a>（多 EA 交易概况）· <a href="/manual-trades" style="color: var(--accent); font-weight: bold;">人工建仓管理</a> · <a href="/ea-accounts" style="color: var(--accent); font-weight: bold;">EA账号列表</a> · <a href="/users" style="color: var(--accent); font-weight: bold;">用户列表</a> · <a href="/commands" style="color: var(--accent); font-weight: bold;">命令历史</a> · <a href="/audit-logs" style="color: var(--accent); font-weight: bold;">审计日志</a></p>
+        <div id="loginBlock" class="grid-2" style="margin-bottom: 12px;">
+          <div class="row">
+            <label for="loginUsername" class="meta">登录用户名</label>
+            <input id="loginUsername" class="input" type="text" autocomplete="username" placeholder="管理员账号" />
+          </div>
+          <div class="row">
+            <label for="loginPassword" class="meta">登录密码</label>
+            <input id="loginPassword" class="input" type="password" autocomplete="current-password" placeholder="密码" />
+          </div>
+        </div>
+        <div class="toolbar" style="margin-bottom: 12px;">
+          <button id="loginBtn" class="button primary" type="button">登录获取 JWT</button>
+          <button id="logoutBtn" class="button ghost" type="button">退出登录</button>
+        </div>
+        <div id="authSession" class="meta" style="margin-bottom: 12px;">未登录 JWT：将使用下方静态 Token（若已填写）。</div>
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 12px 0;" />
+        <p class="meta" style="margin-bottom: 8px;">兼容模式：静态 X-Admin-Token（与 JWT 二选一即可，优先 JWT）</p>
+        <div class="toolbar">
+          <input id="adminToken" class="input" type="password" placeholder="请输入 X-Admin-Token" />
+          <button id="saveTokenBtn" class="button ghost">保存</button>
+          <button id="refreshBtn" class="button primary">刷新</button>
+        </div>
+        <div class="grid-2" style="margin-bottom: 10px;">
+          <div class="row">
+            <label for="autoRefreshEnabled" class="meta">自动刷新</label>
+            <select id="autoRefreshEnabled" class="select">
+              <option value="off">关闭</option>
+              <option value="on" selected>开启</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="autoRefreshInterval" class="meta">刷新间隔</label>
+            <select id="autoRefreshInterval" class="select">
+              <option value="3000">3 秒</option>
+              <option value="5000" selected>5 秒</option>
+              <option value="10000">10 秒</option>
+              <option value="15000">15 秒</option>
+            </select>
+          </div>
+        </div>
+        <div id="autoRefreshStatus" class="meta">自动刷新已开启，每 5 秒刷新一次。</div>
+        <div class="meta">Token 会保存在浏览器本地存储中，方便下次继续使用。</div>
+        <div id="tokenMessage" class="message"></div>
+      </div>
+
+      <div class="panel" style="margin-top: 16px;">
+        <h3>页面定位</h3>
+        <p class="meta">这里不再展示 EA 明细、持仓、快照和命令表格，只保留全局轮廓。具体操作请进入对应页面。</p>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <h2>全局状态</h2>
+            <div class="meta">先看整体风险，再进入单个 EA 操作。</div>
+          </div>
+          <span id="globalRefreshAt" class="meta">尚未刷新</span>
+        </div>
+        <div class="global-grid">
+          <a class="summary-item clickable" href="/manual-trades?status=all">
+            <div class="label">EA 总数</div>
+            <div id="globalTotalEa" class="value">-</div>
+          </a>
+          <a class="summary-item clickable" href="/manual-trades?status=online">
+            <div class="label">在线</div>
+            <div id="globalOnlineEa" class="value">-</div>
+          </a>
+          <a class="summary-item clickable" href="/manual-trades?status=offline">
+            <div class="label">离线</div>
+            <div id="globalOfflineEa" class="value">-</div>
+          </a>
+          <a class="summary-item clickable" href="/manual-trades?risk=paused">
+            <div class="label">风险 / 暂停</div>
+            <div id="globalRiskEa" class="value">-</div>
+          </a>
+          <a class="summary-item clickable" href="/manual-trades?commands=active">
+            <div class="label">未完成命令</div>
+            <div id="globalActiveCommands" class="value">-</div>
+          </a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <h2>交易安全配置</h2>
+            <div class="meta">只读展示当前后端安全限制；实际拦截以 API 校验为准。</div>
+          </div>
+          <a class="meta" href="/commands">查看命令历史</a>
+        </div>
+        <div class="config-grid">
+          <div class="summary-item">
+            <div class="label">最大手数</div>
+            <div id="safetyMaxVolume" class="value">-</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">允许品种</div>
+            <div id="safetySymbols" class="value">-</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">命令超时</div>
+            <div id="safetyCommandTimeout" class="value">-</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">离线判定</div>
+            <div id="safetyOfflineSeconds" class="value">-</div>
+          </div>
+        </div>
+        <div id="safetyNotes" class="config-note-list">
+          <div class="empty">安全配置尚未加载。</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <h2>系统自检</h2>
+            <div class="meta">启动和运行环境的只读检查；不会显示 Token 或密钥明文。</div>
+          </div>
+          <span id="systemCheckStatus" class="badge normal">未加载</span>
+        </div>
+        <div id="systemCheckList" class="check-list">
+          <div class="empty">系统自检尚未加载。</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <h2>风险轮廓</h2>
+            <div class="meta">只显示需要关注的摘要，不展开完整 EA 明细。</div>
+          </div>
+        </div>
+        <div class="risk-grid">
+          <div>
+            <div class="section-title">
+              <h3>离线 EA</h3>
+              <span id="offlineRiskCount" class="meta">0 条</span>
+            </div>
+            <div id="offlineRiskList" class="risk-list">
+              <div class="empty">暂无离线 EA。</div>
+            </div>
+          </div>
+          <div>
+            <div class="section-title">
+              <h3>暂停 / 禁止交易</h3>
+              <span id="pausedRiskCount" class="meta">0 条</span>
+            </div>
+            <div id="pausedRiskList" class="risk-list">
+              <div class="empty">暂无暂停或禁止交易的 EA。</div>
+            </div>
+          </div>
+          <div>
+            <div class="section-title">
+              <h3>未完成命令</h3>
+              <span id="activeCommandRiskCount" class="meta">0 条</span>
+            </div>
+            <div id="activeCommandRiskList" class="risk-list">
+              <div class="empty">暂无未完成命令。</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <h2>功能入口</h2>
+            <div class="meta">具体数据和操作进入对应页面，中央页不重复展示明细。</div>
+          </div>
+        </div>
+        <div class="quick-link-grid">
+          <a class="quick-link" href="/dashboard">
+            <strong>监控大屏</strong>
+            <span class="meta">查看 EA 在线状态、账号数据和交易概况。</span>
+          </a>
+          <a class="quick-link" href="/manual-trades">
+            <strong>人工建仓管理</strong>
+            <span class="meta">处理开仓、平仓、挂单和人工接管操作。</span>
+          </a>
+          <a class="quick-link" href="/ea-accounts">
+            <strong>EA 账号列表</strong>
+            <span class="meta">维护 EA ID、Token、Broker 和用户分配。</span>
+          </a>
+          <a class="quick-link" href="/users">
+            <strong>用户列表</strong>
+            <span class="meta">管理用户、权限和 EA 分配关系。</span>
+          </a>
+          <a class="quick-link" href="/commands">
+            <strong>命令历史</strong>
+            <span class="meta">查看命令状态、执行结果和执行日志。</span>
+          </a>
+          <a class="quick-link" href="/audit-logs">
+            <strong>审计日志</strong>
+            <span class="meta">追踪用户、分配、EA 和命令相关管理动作。</span>
+          </a>
+        </div>
+      </section>
+
+      <div class="hidden-legacy" aria-hidden="true">
+        <span id="eaCount"></span>
+        <div id="eaList"></div>
+        <h2 id="selectedEaTitle"></h2>
+        <div id="selectedEaMeta"></div>
+        <button id="reloadSelectedBtn" type="button"></button>
+        <div id="summaryStatus"></div>
+        <div id="summaryAllowTrading"></div>
+        <div id="summaryAccount"></div>
+        <div id="summaryBalance"></div>
+        <div id="summaryPositions"></div>
+        <span id="snapshotOverviewTime"></span>
+        <div id="snapshotOverviewCards"></div>
+        <pre id="snapshotOverviewRaw"></pre>
+        <span id="commandTimelineCount"></span>
+        <div id="commandTimeline"></div>
+        <span id="transitionFeedCount"></span>
+        <div id="transitionFeed"></div>
+        <span id="auditLogCount"></span>
+        <div id="auditLogFeed"></div>
+        <span id="positionsCount"></span>
+        <table><tbody id="positionsTableBody"></tbody></table>
+        <span id="snapshotsCount"></span>
+        <table><tbody id="snapshotsTableBody"></tbody></table>
+        <button id="reloadCommandsBtn" type="button"></button>
+        <table><tbody id="commandsTableBody"></tbody></table>
+        <input id="requestedBy" type="text" value="admin-ui" />
+        <select id="commandType">
+          <option value="pause_trading">暂停交易</option>
+          <option value="resume_trading">恢复交易</option>
+          <option value="close_all">全部平仓</option>
+          <option value="close_symbol">按品种平仓</option>
+          <option value="close_ticket">按订单号平仓</option>
+          <option value="open_order">手动开单</option>
+          <option value="update_params">更新运行参数</option>
+        </select>
+        <div id="commandTypeDescription"></div>
+        <div id="commandFormFields"></div>
+        <div id="commandRiskNotice"></div>
+        <div id="commandFormValidation"></div>
+        <textarea id="commandPayload"></textarea>
+        <button id="fillExampleBtn" type="button"></button>
+        <button id="sendCommandBtn" type="button"></button>
+        <div id="commandMessage"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      eas: [],
+      selectedEaId: null,
+      positions: [],
+      snapshots: [],
+      commands: [],
+      globalCommands: [],
+      auditLogs: [],
+      safetyConfig: null,
+      systemChecks: null
+    };
+
+    const examplePayloads = {
+      pause_trading: { reason: "人工暂停交易" },
+      resume_trading: { reason: "恢复自动交易" },
+      close_all: { reason: "风险重置", max_slippage_points: 30 },
+      close_symbol: { symbol: "XAUUSD" },
+      close_ticket: { ticket: 123456789 },
+      open_order: {
+        symbol: "XAUUSD",
+        side: "buy",
+        volume: 0.1,
+        sl: 3300.0,
+        tp: 3340.0,
+        comment: "后台手动开单"
+      },
+      update_params: {
+        heartbeat_interval_sec: 5,
+        snapshot_interval_sec: 10,
+        command_poll_interval_sec: 2
+      }
+    };
+
+    const elements = {
+      adminToken: document.getElementById("adminToken"),
+      loginUsername: document.getElementById("loginUsername"),
+      loginPassword: document.getElementById("loginPassword"),
+      loginBtn: document.getElementById("loginBtn"),
+      logoutBtn: document.getElementById("logoutBtn"),
+      authSession: document.getElementById("authSession"),
+      autoRefreshEnabled: document.getElementById("autoRefreshEnabled"),
+      autoRefreshInterval: document.getElementById("autoRefreshInterval"),
+      autoRefreshStatus: document.getElementById("autoRefreshStatus"),
+      globalRefreshAt: document.getElementById("globalRefreshAt"),
+      globalTotalEa: document.getElementById("globalTotalEa"),
+      globalOnlineEa: document.getElementById("globalOnlineEa"),
+      globalOfflineEa: document.getElementById("globalOfflineEa"),
+      globalRiskEa: document.getElementById("globalRiskEa"),
+      globalActiveCommands: document.getElementById("globalActiveCommands"),
+      offlineRiskCount: document.getElementById("offlineRiskCount"),
+      offlineRiskList: document.getElementById("offlineRiskList"),
+      pausedRiskCount: document.getElementById("pausedRiskCount"),
+      pausedRiskList: document.getElementById("pausedRiskList"),
+      activeCommandRiskCount: document.getElementById("activeCommandRiskCount"),
+      activeCommandRiskList: document.getElementById("activeCommandRiskList"),
+      safetyMaxVolume: document.getElementById("safetyMaxVolume"),
+      safetySymbols: document.getElementById("safetySymbols"),
+      safetyCommandTimeout: document.getElementById("safetyCommandTimeout"),
+      safetyOfflineSeconds: document.getElementById("safetyOfflineSeconds"),
+      safetyNotes: document.getElementById("safetyNotes"),
+      systemCheckStatus: document.getElementById("systemCheckStatus"),
+      systemCheckList: document.getElementById("systemCheckList"),
+      eaList: document.getElementById("eaList"),
+      eaCount: document.getElementById("eaCount"),
+      selectedEaTitle: document.getElementById("selectedEaTitle"),
+      selectedEaMeta: document.getElementById("selectedEaMeta"),
+      summaryStatus: document.getElementById("summaryStatus"),
+      summaryAllowTrading: document.getElementById("summaryAllowTrading"),
+      summaryAccount: document.getElementById("summaryAccount"),
+      summaryBalance: document.getElementById("summaryBalance"),
+      summaryPositions: document.getElementById("summaryPositions"),
+      snapshotOverviewTime: document.getElementById("snapshotOverviewTime"),
+      snapshotOverviewCards: document.getElementById("snapshotOverviewCards"),
+      snapshotOverviewRaw: document.getElementById("snapshotOverviewRaw"),
+      commandTimelineCount: document.getElementById("commandTimelineCount"),
+      commandTimeline: document.getElementById("commandTimeline"),
+      transitionFeedCount: document.getElementById("transitionFeedCount"),
+      transitionFeed: document.getElementById("transitionFeed"),
+      auditLogCount: document.getElementById("auditLogCount"),
+      auditLogFeed: document.getElementById("auditLogFeed"),
+      positionsTableBody: document.getElementById("positionsTableBody"),
+      positionsCount: document.getElementById("positionsCount"),
+      snapshotsTableBody: document.getElementById("snapshotsTableBody"),
+      snapshotsCount: document.getElementById("snapshotsCount"),
+      commandsTableBody: document.getElementById("commandsTableBody"),
+      requestedBy: document.getElementById("requestedBy"),
+      commandType: document.getElementById("commandType"),
+      commandTypeDescription: document.getElementById("commandTypeDescription"),
+      commandFormFields: document.getElementById("commandFormFields"),
+      commandRiskNotice: document.getElementById("commandRiskNotice"),
+      commandFormValidation: document.getElementById("commandFormValidation"),
+      commandPayload: document.getElementById("commandPayload"),
+      tokenMessage: document.getElementById("tokenMessage"),
+      commandMessage: document.getElementById("commandMessage")
+    };
+
+    const autoRefresh = {
+      timerId: null,
+      lastRefreshAt: null
+    };
+
+    const lifecycle = {
+      easHydrated: false,
+      commandsHydrated: false
+    };
+
+    const commandFieldSchemas = {
+      pause_trading: [
+        { name: "reason", label: "暂停原因", type: "text", placeholder: "例如：人工干预", help: "建议写明暂停原因，方便后续审计与交接。" }
+      ],
+      resume_trading: [
+        { name: "reason", label: "恢复原因", type: "text", placeholder: "例如：恢复自动交易", help: "建议说明恢复条件已满足，例如行情稳定或人工复核完成。" }
+      ],
+      close_all: [
+        { name: "reason", label: "平仓原因", type: "text", placeholder: "例如：风险重置", help: "会对当前 EA 的全部持仓发起平仓请求。" },
+        { name: "max_slippage_points", label: "最大滑点（点）", type: "number", step: "1", placeholder: "例如：30", help: "数值越大越容易成交，但可能承受更差价格。" }
+      ],
+      close_symbol: [
+        { name: "symbol", label: "交易品种", type: "text", required: true, placeholder: "例如：XAUUSD", help: "只会关闭当前 EA 在该品种上的持仓。" }
+      ],
+      close_ticket: [
+        { name: "ticket", label: "订单号", type: "text", required: true, placeholder: "例如：123456789", help: "适合精确处理单一订单，请确认订单号无误。" }
+      ],
+      open_order: [
+        { name: "symbol", label: "交易品种", type: "text", required: true, placeholder: "例如：XAUUSD", help: "建议与终端品种名完全一致，例如 XAUUSD 或 EURUSD。" },
+        {
+          name: "side",
+          label: "买卖方向",
+          type: "select",
+          required: true,
+          options: [
+            { value: "buy", text: "买入" },
+            { value: "sell", text: "卖出" }
+          ],
+          help: "选择买入或卖出方向。"
+        },
+        { name: "volume", label: "下单手数", type: "number", required: true, step: "0.01", placeholder: "例如：0.1", help: "必须大于 0，请按经纪商允许的最小手数填写。" },
+        { name: "sl", label: "止损价", type: "number", step: "0.01", placeholder: "可选", help: "建议填写止损，避免裸奔仓位。" },
+        { name: "tp", label: "止盈价", type: "number", step: "0.01", placeholder: "可选", help: "可选，设置后由 EA 一并下发。" },
+        { name: "comment", label: "订单备注", type: "text", placeholder: "例如：admin order", help: "备注会进入订单说明，便于后续追踪。" }
+      ],
+      update_params: [
+        { name: "heartbeat_interval_sec", label: "心跳间隔（秒）", type: "number", step: "1", placeholder: "例如：5", help: "留空则保持当前值不变。" },
+        { name: "snapshot_interval_sec", label: "快照间隔（秒）", type: "number", step: "1", placeholder: "例如：10", help: "留空则保持当前值不变。" },
+        { name: "command_poll_interval_sec", label: "命令轮询间隔（秒）", type: "number", step: "1", placeholder: "例如：2", help: "轮询越频繁，响应越快，但请求次数也更多。" }
+      ]
+    };
+
+    function getStoredJwt() {
+      return (localStorage.getItem("ea-admin-jwt") || "").trim();
+    }
+
+    function setStoredJwt(token) {
+      if (token) {
+        localStorage.setItem("ea-admin-jwt", token);
+      } else {
+        localStorage.removeItem("ea-admin-jwt");
+      }
+      updateAuthSessionUI();
+    }
+
+    function updateAuthSessionUI() {
+      const jwt = getStoredJwt();
+      const me = localStorage.getItem("ea-admin-user");
+      if (jwt && me) {
+        elements.authSession.textContent = "已登录 JWT：" + me + "（优先用于请求）";
+        return;
+      }
+      if (jwt) {
+        elements.authSession.textContent = "已保存 JWT（优先用于请求）。";
+        return;
+      }
+      elements.authSession.textContent = "未登录 JWT：将使用下方静态 Token（若已填写）。";
+    }
+
+    function getToken() {
+      return elements.adminToken.value.trim();
+    }
+
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    }
+
+    function formatNumber(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      const number = Number(value);
+      return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 2 }) : String(value);
+    }
+
+    function showMessage(target, text, type) {
+      target.textContent = text;
+      target.className = "message show " + type;
+    }
+
+    function clearMessage(target) {
+      target.textContent = "";
+      target.className = "message";
+    }
+
+    function autoRefreshEnabled() {
+      return elements.autoRefreshEnabled.value === "on";
+    }
+
+    function autoRefreshIntervalMs() {
+      return Number(elements.autoRefreshInterval.value || 5000);
+    }
+
+    function updateAutoRefreshStatus() {
+      if (!autoRefreshEnabled()) {
+        elements.autoRefreshStatus.textContent = "自动刷新已关闭。";
+        return;
+      }
+
+      const seconds = Math.round(autoRefreshIntervalMs() / 1000);
+      const lastRefreshText = autoRefresh.lastRefreshAt
+        ? `最近刷新：${formatDate(autoRefresh.lastRefreshAt)}`
+        : "尚未自动刷新";
+      elements.autoRefreshStatus.textContent = `自动刷新已开启，每 ${seconds} 秒刷新一次。${lastRefreshText}`;
+    }
+
+    function stopAutoRefresh() {
+      if (autoRefresh.timerId !== null) {
+        clearInterval(autoRefresh.timerId);
+        autoRefresh.timerId = null;
+      }
+      updateAutoRefreshStatus();
+    }
+
+    function startAutoRefresh() {
+      stopAutoRefresh();
+      if (!autoRefreshEnabled()) {
+        return;
+      }
+
+      autoRefresh.timerId = window.setInterval(async () => {
+        if (document.hidden) {
+          return;
+        }
+        try {
+          await refreshAll(true);
+          autoRefresh.lastRefreshAt = new Date().toISOString();
+          updateAutoRefreshStatus();
+        } catch (error) {
+          updateAutoRefreshStatus();
+        }
+      }, autoRefreshIntervalMs());
+
+      updateAutoRefreshStatus();
+    }
+
+    function persistAutoRefreshSettings() {
+      localStorage.setItem("ea-admin-auto-refresh-enabled", elements.autoRefreshEnabled.value);
+      localStorage.setItem("ea-admin-auto-refresh-interval", elements.autoRefreshInterval.value);
+    }
+
+    function loadAutoRefreshSettings() {
+      const enabled = localStorage.getItem("ea-admin-auto-refresh-enabled");
+      const interval = localStorage.getItem("ea-admin-auto-refresh-interval");
+      if (enabled === "on" || enabled === "off") {
+        elements.autoRefreshEnabled.value = enabled;
+      }
+      if (interval && Array.from(elements.autoRefreshInterval.options).some((option) => option.value === interval)) {
+        elements.autoRefreshInterval.value = interval;
+      }
+      updateAutoRefreshStatus();
+    }
+
+    function apiErrorMessage(text, statusCode) {
+      if (!text) return `请求失败：${statusCode}`;
+      try {
+        const parsed = JSON.parse(text);
+        const detail = parsed.detail;
+        if (typeof detail === "string") return detail;
+        if (Array.isArray(detail)) {
+          return detail.map((item) => {
+            const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+            return [location, item.msg].filter(Boolean).join("：");
+          }).join("；");
+        }
+        if (detail) return JSON.stringify(detail);
+      } catch {
+        // Non-JSON response; show the original text.
+      }
+      return text;
+    }
+
+    async function api(path, options = {}) {
+      const jwt = getStoredJwt();
+      const legacy = getToken();
+      if (!jwt && !legacy) {
+        throw new Error("请先登录获取 JWT，或在下方填写 X-Admin-Token。");
+      }
+      const headers = { ...options.headers };
+      if (jwt) {
+        headers["Authorization"] = "Bearer " + jwt;
+      } else {
+        headers["X-Admin-Token"] = legacy;
+      }
+      const response = await fetch(path, { ...options, headers });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(apiErrorMessage(text, response.status));
+      }
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        return response.json();
+      }
+      return response.text();
+    }
+
+    function badgeClass(status) {
+      const key = String(status || "").toLowerCase();
+      return "badge " + (key || "offline");
+    }
+
+    function statusText(status) {
+      const statusMap = {
+        online: "在线",
+        offline: "离线",
+        pending: "待下发",
+        received: "已接收",
+        executing: "执行中",
+        success: "成功",
+        failed: "失败",
+        timeout: "超时",
+        cancelled: "已取消"
+      };
+      const key = String(status || "").toLowerCase();
+      return statusMap[key] || String(status || "-");
+    }
+
+    function commandTypeText(commandType) {
+      const commandTypeMap = {
+        pause_trading: "暂停交易",
+        resume_trading: "恢复交易",
+        close_all: "全部平仓",
+        close_symbol: "按品种平仓",
+        close_ticket: "按订单号平仓",
+        cancel_order: "取消挂单",
+        open_order: "手动开单",
+        update_params: "更新运行参数"
+      };
+      return commandTypeMap[String(commandType || "")] || String(commandType || "-");
+    }
+
+    function sideText(side) {
+      const sideMap = {
+        buy: "买入",
+        sell: "卖出"
+      };
+      return sideMap[String(side || "").toLowerCase()] || String(side || "-");
+    }
+
+    function riskBadgeClass(level) {
+      const map = {
+        high: "badge timeout",
+        watch: "badge watch",
+        paused: "badge paused",
+        normal: "badge normal"
+      };
+      return map[String(level || "").toLowerCase()] || "badge normal";
+    }
+
+    function riskText(ea) {
+      const map = {
+        normal: "正常",
+        ea_offline: "EA离线",
+        recent_command_issue: "最近命令异常",
+        command_in_progress: "命令处理中",
+        trading_paused: "交易已暂停"
+      };
+      return map[String(ea.risk_text || "").toLowerCase()] || "正常";
+    }
+
+    function latestCommandSummary(ea) {
+      if (!ea.latest_command_type || !ea.latest_command_status) {
+        return "暂无命令";
+      }
+      return `${commandTypeText(ea.latest_command_type)} / ${statusText(ea.latest_command_status)}`;
+    }
+
+    function activityLevelForStatus(status) {
+      const key = String(status || "").toLowerCase();
+      if (key === "failed" || key === "timeout" || key === "cancelled" || key === "offline") {
+        return "error";
+      }
+      if (key === "pending" || key === "received" || key === "executing" || key === "watch") {
+        return "warn";
+      }
+      return "info";
+    }
+
+    function pushActivity(message, level = "info", details = "") {
+      state.activityFeed = state.activityFeed || [];
+      state.activityFeed.unshift({
+        message,
+        level,
+        details,
+        createdAt: new Date().toISOString()
+      });
+      state.activityFeed = state.activityFeed.slice(0, 12);
+      renderTransitionFeed();
+    }
+
+    function detectEaTransitions(previousEas, nextEas) {
+      if (!lifecycle.easHydrated) {
+        lifecycle.easHydrated = true;
+        return;
+      }
+
+      const previousMap = new Map(previousEas.map((ea) => [ea.ea_id, ea]));
+      for (const ea of nextEas) {
+        const oldEa = previousMap.get(ea.ea_id);
+        if (!oldEa) {
+          pushActivity(`EA ${ea.ea_id} 已出现在后台概览中。`, "info", `当前状态：${statusText(ea.status)}`);
+          continue;
+        }
+
+        if (oldEa.status !== ea.status) {
+          pushActivity(
+            `EA ${ea.ea_id} 状态变化：${statusText(oldEa.status)} -> ${statusText(ea.status)}。`,
+            activityLevelForStatus(ea.status),
+            `风险状态：${riskText(ea)}`
+          );
+        }
+
+        if (oldEa.risk_text !== ea.risk_text) {
+          pushActivity(
+            `EA ${ea.ea_id} 风险提示更新为：${riskText(ea)}。`,
+            activityLevelForStatus(ea.risk_level),
+            `最近命令：${latestCommandSummary(ea)}`
+          );
+        }
+      }
+    }
+
+    function detectCommandTransitions(previousCommands, nextCommands) {
+      if (!lifecycle.commandsHydrated) {
+        lifecycle.commandsHydrated = true;
+        return;
+      }
+
+      const previousMap = new Map(previousCommands.map((command) => [command.id, command]));
+      for (const command of nextCommands) {
+        const oldCommand = previousMap.get(command.id);
+        if (!oldCommand) {
+          pushActivity(
+            `命令 #${command.id} 已创建：${commandTypeText(command.command_type)}。`,
+            activityLevelForStatus(command.status),
+            `初始状态：${statusText(command.status)}`
+          );
+          continue;
+        }
+
+        if (oldCommand.status !== command.status) {
+          pushActivity(
+            `命令 #${command.id} 状态变化：${statusText(oldCommand.status)} -> ${statusText(command.status)}。`,
+            activityLevelForStatus(command.status),
+            `${commandTypeText(command.command_type)}`
+          );
+        }
+
+        const oldLatestLog = Array.isArray(oldCommand.logs) && oldCommand.logs.length ? oldCommand.logs[oldCommand.logs.length - 1] : null;
+        const newLatestLog = Array.isArray(command.logs) && command.logs.length ? command.logs[command.logs.length - 1] : null;
+        if (newLatestLog && newLatestLog.id !== oldLatestLog?.id) {
+          pushActivity(
+            `命令 #${command.id} 收到新的执行反馈。`,
+            activityLevelForStatus(newLatestLog.status),
+            newLatestLog.message || statusText(newLatestLog.status)
+          );
+        }
+      }
+    }
+
+    function commandDescriptionText(commandType) {
+      const textMap = {
+        pause_trading: "暂停当前 EA 的自动交易，适合人工接管或临时风控处理。",
+        resume_trading: "恢复 EA 的自动交易，适合在风控解除后重新放开策略执行。",
+        close_all: "对当前 EA 的全部持仓发起平仓请求，请谨慎确认风险与滑点设置。",
+        close_symbol: "只关闭指定品种的持仓，适合单品种快速风控。",
+        close_ticket: "只处理单一订单，适合精确干预某一笔交易。",
+        open_order: "通过后台手动创建一笔市场单，请特别确认品种、方向、手数和风控价格。",
+        update_params: "动态调整 EA 运行参数，适合联调、压测或优化轮询节奏。"
+      };
+      return textMap[String(commandType || "")] || "";
+    }
+
+    function commandRiskText(commandType) {
+      const textMap = {
+        close_all: "风险提示：该操作会尝试关闭当前 EA 的全部持仓，请确认不是误操作。",
+        close_symbol: "风险提示：请确认品种名称与交易终端一致，否则 EA 可能无法匹配到持仓。",
+        close_ticket: "风险提示：订单号错误会导致命令执行失败，请先在持仓表核对订单号。",
+        open_order: "风险提示：手动开单会直接影响实盘/模拟账户，请确认方向、手数、止损止盈后再发送。",
+        update_params: "提示：只填写你想修改的参数，留空的字段会保持原值。"
+      };
+      return textMap[String(commandType || "")] || "";
+    }
+
+    function getPreferredSymbol() {
+      if (state.positions.length > 0 && state.positions[0].symbol) {
+        return state.positions[0].symbol;
+      }
+      return "XAUUSD";
+    }
+
+    function clearCommandFormMessages() {
+      clearMessage(elements.commandRiskNotice);
+      clearMessage(elements.commandFormValidation);
+    }
+
+    function validatePayload(type, payload) {
+      if ((type === "close_symbol" || type === "open_order") && !payload.symbol) {
+        return "请填写：交易品种";
+      }
+      if (type === "close_ticket" && !payload.ticket) {
+        return "请填写：订单号";
+      }
+      if (type === "open_order") {
+        if (!payload.side) {
+          return "请填写：买卖方向";
+        }
+        if (payload.volume === undefined || payload.volume === null || payload.volume <= 0) {
+          return "下单手数必须大于 0。";
+        }
+      }
+      if (type === "close_all" && payload.max_slippage_points !== undefined && payload.max_slippage_points < 0) {
+        return "最大滑点不能小于 0。";
+      }
+      if (type === "update_params") {
+        if (Object.keys(payload).length === 0) {
+          return "请至少填写一个运行参数。";
+        }
+        for (const [key, value] of Object.entries(payload)) {
+          if (Number(value) <= 0) {
+            return `${key} 必须大于 0。`;
+          }
+        }
+      }
+      return "";
+    }
+
+    function renderCommandForm(resetToExample = true) {
+      const type = elements.commandType.value;
+      const fields = commandFieldSchemas[type] || [];
+      elements.commandTypeDescription.textContent = commandDescriptionText(type);
+      elements.commandFormFields.innerHTML = fields.map((field) => {
+        const requiredMark = field.required ? " *" : "";
+        if (field.type === "select") {
+          const options = (field.options || []).map((option) =>
+            `<option value="${escapeHtml(option.value)}">${escapeHtml(option.text)}</option>`
+          ).join("");
+          return `
+            <div class="row">
+              <label class="meta" for="field_${escapeHtml(field.name)}">${escapeHtml(field.label + requiredMark)}</label>
+              <select id="field_${escapeHtml(field.name)}" class="select" data-command-field="${escapeHtml(field.name)}">
+                ${options}
+              </select>
+              ${field.help ? `<div class="field-help">${escapeHtml(field.help)}</div>` : ""}
+            </div>
+          `;
+        }
+
+        return `
+          <div class="row">
+            <label class="meta" for="field_${escapeHtml(field.name)}">${escapeHtml(field.label + requiredMark)}</label>
+            <input
+              id="field_${escapeHtml(field.name)}"
+              class="input"
+              data-command-field="${escapeHtml(field.name)}"
+              type="${escapeHtml(field.type)}"
+              step="${escapeHtml(field.step || "any")}"
+              placeholder="${escapeHtml(field.placeholder || "")}"
+            />
+            ${field.help ? `<div class="field-help">${escapeHtml(field.help)}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+
+      if (resetToExample) {
+        const example = { ...(examplePayloads[type] || {}) };
+        if ((type === "close_symbol" || type === "open_order") && !example.symbol) {
+          example.symbol = getPreferredSymbol();
+        }
+        for (const field of fields) {
+          const input = elements.commandFormFields.querySelector(`[data-command-field="${field.name}"]`);
+          if (!input) continue;
+          const exampleValue = example[field.name];
+          input.value = exampleValue === undefined || exampleValue === null ? "" : String(exampleValue);
+        }
+      }
+
+      clearCommandFormMessages();
+      const riskText = commandRiskText(type);
+      if (riskText) {
+        showMessage(elements.commandRiskNotice, riskText, type === "open_order" || type === "close_all" ? "warn" : "info");
+      }
+
+      Array.from(elements.commandFormFields.querySelectorAll("[data-command-field]")).forEach((input) => {
+        input.addEventListener("input", refreshCommandPayloadPreview);
+        input.addEventListener("change", refreshCommandPayloadPreview);
+      });
+
+      refreshCommandPayloadPreview();
+    }
+
+    function buildPayloadFromForm(validate = false) {
+      const type = elements.commandType.value;
+      const fields = commandFieldSchemas[type] || [];
+      const payload = {};
+
+      for (const field of fields) {
+        const input = elements.commandFormFields.querySelector(`[data-command-field="${field.name}"]`);
+        if (!input) continue;
+
+        const rawValue = String(input.value ?? "").trim();
+        if (!rawValue) {
+          if (validate && field.required) {
+            throw new Error(`请填写：${field.label}`);
+          }
+          continue;
+        }
+
+        if (field.type === "number") {
+          const numericValue = Number(rawValue);
+          if (!Number.isFinite(numericValue)) {
+            throw new Error(`${field.label} 必须是数字。`);
+          }
+          payload[field.name] = numericValue;
+          continue;
+        }
+
+        payload[field.name] = rawValue;
+      }
+
+      if (validate && type === "update_params" && Object.keys(payload).length === 0) {
+        throw new Error("请至少填写一个运行参数。");
+      }
+
+      const payloadError = validatePayload(type, payload);
+      if (validate && payloadError) {
+        throw new Error(payloadError);
+      }
+
+      return payload;
+    }
+
+    function refreshCommandPayloadPreview() {
+      try {
+        const payload = buildPayloadFromForm(false);
+        elements.commandPayload.value = JSON.stringify(payload, null, 2);
+        const payloadError = validatePayload(elements.commandType.value, payload);
+        if (payloadError) {
+          showMessage(elements.commandFormValidation, payloadError, "error");
+        } else {
+          clearMessage(elements.commandFormValidation);
+        }
+      } catch (error) {
+        elements.commandPayload.value = "";
+        showMessage(elements.commandFormValidation, error.message, "error");
+      }
+    }
+
+    function allowTradingLabel(allowTrading) {
+      if (allowTrading === true) return "允许交易";
+      if (allowTrading === false) return "已暂停开仓";
+      return "未知";
+    }
+
+    function allowTradingBadgeClass(allowTrading) {
+      if (allowTrading === true) return "badge online";
+      if (allowTrading === false) return "badge watch";
+      return "badge normal";
+    }
+
+    function allowTradingBadgeHtml(ea) {
+      if (!ea) return "-";
+      const at = ea.allow_trading;
+      return `<span class="${allowTradingBadgeClass(at)}">${escapeHtml(allowTradingLabel(at))}</span>`;
+    }
+
+    function renderEaList() {
+      elements.eaCount.textContent = state.eas.length + " 条";
+      if (!state.eas.length) {
+        elements.eaList.innerHTML = '<div class="empty">还没有 EA 数据。请先发送 heartbeat 或 snapshot。</div>';
+        return;
+      }
+
+      elements.eaList.innerHTML = state.eas.map((ea) => {
+        const activeClass = ea.ea_id === state.selectedEaId ? "active" : "";
+        const lastSeen = formatDate(ea.last_seen_at);
+        const snapshotAt = formatDate(ea.latest_snapshot_at);
+        const latestCommand = latestCommandSummary(ea);
+        return `
+          <div class="ea-card ${activeClass}" data-ea-id="${escapeHtml(ea.ea_id)}">
+            <strong>${escapeHtml(ea.ea_id)}</strong>
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+              <span class="${badgeClass(ea.status)}">${escapeHtml(statusText(ea.status || "unknown"))}</span>
+              <span class="${riskBadgeClass(ea.risk_level)}">${escapeHtml(riskText(ea))}</span>
+              <span class="${allowTradingBadgeClass(ea.allow_trading)}">${escapeHtml(allowTradingLabel(ea.allow_trading))}</span>
+              <span class="meta">${escapeHtml(ea.terminal || "-")}</span>
+            </div>
+            <div class="meta">账号: ${escapeHtml(String(ea.account_number ?? "-"))}</div>
+            <div class="meta">持仓数: ${escapeHtml(String(ea.positions_count ?? 0))}</div>
+            <div class="meta">券商: ${escapeHtml(ea.broker || "-")}</div>
+            <div class="meta">最近快照: ${escapeHtml(snapshotAt)}</div>
+            <div class="meta">最近命令: ${escapeHtml(latestCommand)}</div>
+            <div class="meta">版本: ${escapeHtml(ea.version || "-")}</div>
+            <div class="meta">最后心跳: ${escapeHtml(lastSeen)}</div>
+          </div>
+        `;
+      }).join("");
+
+      Array.from(elements.eaList.querySelectorAll(".ea-card")).forEach((node) => {
+        node.addEventListener("click", () => {
+          selectEa(node.getAttribute("data-ea-id"));
+        });
+      });
+    }
+
+    function renderSummary() {
+      const ea = state.eas.find((item) => item.ea_id === state.selectedEaId);
+      const snapshot = state.snapshots[0];
+      elements.selectedEaTitle.textContent = ea ? ea.ea_id : "请选择一个 EA";
+      elements.selectedEaMeta.textContent = ea
+        ? `${ea.terminal || "-"} | ${ea.broker || "-"} | 交易许可：${allowTradingLabel(ea.allow_trading)} | 风险：${riskText(ea)} | 最近命令：${latestCommandSummary(ea)} | 最后心跳 ${formatDate(ea.last_seen_at)}`
+        : "从左侧选择一个 EA，查看当前状态与最新数据。";
+      elements.summaryStatus.innerHTML = ea ? `<span class="${badgeClass(ea.status)}">${escapeHtml(statusText(ea.status))}</span>` : "-";
+      elements.summaryAllowTrading.innerHTML = allowTradingBadgeHtml(ea);
+      elements.summaryAccount.textContent = ea ? String(ea.account_number ?? "-") : "-";
+      elements.summaryBalance.textContent = snapshot
+        ? `${formatNumber(snapshot.balance)} / ${formatNumber(snapshot.equity)}`
+        : "-";
+      elements.summaryPositions.textContent = String(state.positions.length);
+      renderSnapshotOverview();
+    }
+
+    function renderGlobalStatus() {
+      const total = state.eas.length;
+      const online = state.eas.filter((ea) => ea.status === "online").length;
+      const offline = state.eas.filter((ea) => ea.status === "offline").length;
+      const risk = state.eas.filter((ea) =>
+        ea.allow_trading === false || ["high", "watch", "paused"].includes(String(ea.risk_level || ""))
+      ).length;
+      const activeCommands = state.globalCommands.filter((command) =>
+        ["pending", "received", "executing"].includes(String(command.status || ""))
+      ).length;
+      elements.globalTotalEa.textContent = String(total);
+      elements.globalOnlineEa.textContent = String(online);
+      elements.globalOfflineEa.textContent = String(offline);
+      elements.globalRiskEa.textContent = String(risk);
+      elements.globalActiveCommands.textContent = String(activeCommands);
+      elements.globalRefreshAt.textContent = `最近刷新：${formatDate(new Date().toISOString())}`;
+    }
+
+    function renderRiskList(container, rows, emptyText, renderRow) {
+      container.innerHTML = rows.length
+        ? rows.slice(0, 6).map(renderRow).join("")
+        : `<div class="empty">${emptyText}</div>`;
+    }
+
+    function renderGlobalRisks() {
+      const offlineRows = state.eas.filter((ea) => ea.status === "offline");
+      const pausedRows = state.eas.filter((ea) => ea.allow_trading === false);
+      const activeCommands = state.globalCommands.filter((command) =>
+        ["pending", "received", "executing"].includes(String(command.status || ""))
+      );
+
+      elements.offlineRiskCount.textContent = `${offlineRows.length} 条`;
+      renderRiskList(elements.offlineRiskList, offlineRows, "暂无离线 EA。", (ea) => `
+        <div class="risk-item">
+          <strong><a href="/ea-detail?ea=${encodeURIComponent(ea.ea_id)}">${escapeHtml(ea.ea_id)}</a></strong>
+          <div class="meta">最后心跳：${formatDate(ea.last_heartbeat_at || ea.last_seen_at)}</div>
+        </div>
+      `);
+
+      elements.pausedRiskCount.textContent = `${pausedRows.length} 条`;
+      renderRiskList(elements.pausedRiskList, pausedRows, "暂无暂停或禁止交易的 EA。", (ea) => `
+        <div class="risk-item">
+          <strong><a href="/ea-detail?ea=${encodeURIComponent(ea.ea_id)}">${escapeHtml(ea.ea_id)}</a></strong>
+          <div class="meta">交易许可：${escapeHtml(allowTradingLabel(ea.allow_trading))}</div>
+        </div>
+      `);
+
+      elements.activeCommandRiskCount.textContent = `${activeCommands.length} 条`;
+      renderRiskList(elements.activeCommandRiskList, activeCommands, "暂无未完成命令。", (command) => `
+        <div class="risk-item">
+          <strong><a href="/ea-detail?ea=${encodeURIComponent(command.ea_id)}">${escapeHtml(command.ea_id)}</a> · ${escapeHtml(commandTypeText(command.command_type))}</strong>
+          <div class="meta">状态：${escapeHtml(statusText(command.status))} · 创建：${formatDate(command.created_at)}</div>
+        </div>
+      `);
+    }
+
+    function renderSafetyConfig() {
+      const config = state.safetyConfig;
+      if (!config) {
+        elements.safetyMaxVolume.textContent = "-";
+        elements.safetySymbols.textContent = "-";
+        elements.safetyCommandTimeout.textContent = "-";
+        elements.safetyOfflineSeconds.textContent = "-";
+        elements.safetyNotes.innerHTML = '<div class="empty">安全配置尚未加载。</div>';
+        return;
+      }
+      const symbols = config.allowed_trade_symbols || [];
+      elements.safetyMaxVolume.textContent = String(config.max_manual_order_volume);
+      elements.safetySymbols.textContent = symbols.length ? symbols.join(", ") : "不限";
+      elements.safetyCommandTimeout.textContent = `${config.command_timeout_seconds} 秒`;
+      elements.safetyOfflineSeconds.textContent = `${config.ea_offline_seconds} 秒`;
+      const previewNote = config.public_dashboard_preview_enabled
+        ? "监控大屏公开预览：已开启"
+        : "监控大屏公开预览：已关闭";
+      const notes = [previewNote, ...(config.notes || [])];
+      elements.safetyNotes.innerHTML = notes.map((note) => `
+        <div class="config-note">${escapeHtml(note)}</div>
+      `).join("");
+    }
+
+    function checkBadgeClass(status) {
+      if (status === "ok") return "badge success";
+      if (status === "error") return "badge failed";
+      return "badge pending";
+    }
+
+    function checkStatusText(status) {
+      if (status === "ok") return "正常";
+      if (status === "error") return "异常";
+      return "提醒";
+    }
+
+    function renderSystemChecks() {
+      const result = state.systemChecks;
+      if (!result) {
+        elements.systemCheckStatus.className = "badge normal";
+        elements.systemCheckStatus.textContent = "未加载";
+        elements.systemCheckList.innerHTML = '<div class="empty">系统自检尚未加载。</div>';
+        return;
+      }
+      elements.systemCheckStatus.className = checkBadgeClass(result.status);
+      elements.systemCheckStatus.textContent = checkStatusText(result.status);
+      const checks = result.checks || [];
+      elements.systemCheckList.innerHTML = checks.length
+        ? checks.map((check) => `
+          <div class="check-item">
+            <div class="check-head">
+              <strong>${escapeHtml(check.title)}</strong>
+              <span class="${checkBadgeClass(check.status)}">${escapeHtml(checkStatusText(check.status))}</span>
+            </div>
+            <div class="meta">${escapeHtml(check.message)}</div>
+          </div>
+        `).join("")
+        : '<div class="empty">暂无自检项目。</div>';
+    }
+
+    function renderPositions() {
+      elements.positionsCount.textContent = state.positions.length + " 条";
+      if (!state.positions.length) {
+        elements.positionsTableBody.innerHTML = '<tr><td colspan="7" class="meta">暂无持仓数据。</td></tr>';
+        return;
+      }
+      elements.positionsTableBody.innerHTML = state.positions.map((position) => `
+        <tr>
+          <td>${escapeHtml(String(position.ticket ?? "-"))}</td>
+          <td>${escapeHtml(position.symbol || "-")}</td>
+          <td>${escapeHtml(sideText(position.side))}</td>
+          <td>${escapeHtml(String(position.volume ?? "-"))}</td>
+          <td>${escapeHtml(String(position.open_price ?? "-"))}</td>
+          <td>${escapeHtml(String(position.profit ?? "-"))}</td>
+          <td>${escapeHtml(formatDate(position.updated_at))}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderSnapshots() {
+      elements.snapshotsCount.textContent = state.snapshots.length + " 条";
+      if (!state.snapshots.length) {
+        elements.snapshotsTableBody.innerHTML = '<tr><td colspan="6" class="meta">暂无快照数据。</td></tr>';
+        renderSnapshotOverview();
+        return;
+      }
+      elements.snapshotsTableBody.innerHTML = state.snapshots.map((snapshot) => `
+        <tr>
+          <td>${escapeHtml(formatDate(snapshot.created_at))}</td>
+          <td>${escapeHtml(String(snapshot.balance ?? "-"))}</td>
+          <td>${escapeHtml(String(snapshot.equity ?? "-"))}</td>
+          <td>${escapeHtml(String(snapshot.margin ?? "-"))}</td>
+          <td>${escapeHtml(String(snapshot.free_margin ?? "-"))}</td>
+          <td><pre>${escapeHtml(prettyJson(snapshot.raw || {}))}</pre></td>
+        </tr>
+      `).join("");
+      renderSnapshotOverview();
+    }
+
+    function renderCommands() {
+      elements.commandsTableBody.innerHTML = state.commands.length
+        ? state.commands.map((command) => `
+          <tr>
+            <td>${command.id}</td>
+            <td>${escapeHtml(command.ea_id)}</td>
+            <td>${escapeHtml(commandTypeText(command.command_type))}</td>
+            <td><span class="${badgeClass(command.status)}">${escapeHtml(statusText(command.status))}</span></td>
+            <td>${escapeHtml(command.requested_by || "-")}</td>
+            <td>${escapeHtml(formatDate(command.created_at))}</td>
+            <td>${escapeHtml(formatDate(command.expires_at))}</td>
+            <td>${renderCommandResult(command)}</td>
+            <td>${renderCommandLogs(command)}</td>
+            <td><pre>${escapeHtml(prettyJson(command.payload || {}))}</pre></td>
+            <td>${renderCommandAction(command)}</td>
+          </tr>
+        `).join("")
+        : '<tr><td colspan="11" class="meta">暂无命令记录。</td></tr>';
+      renderCommandTimeline();
+
+      Array.from(elements.commandsTableBody.querySelectorAll("[data-cancel-command-id]")).forEach((button) => {
+        button.addEventListener("click", async () => {
+          const commandId = button.getAttribute("data-cancel-command-id");
+          try {
+            await api(`/api/admin/commands/${commandId}/cancel`, { method: "POST" });
+            showMessage(elements.commandMessage, `命令 ${commandId} 已取消。`, "ok");
+            await loadCommands(state.selectedEaId);
+          } catch (error) {
+            showMessage(elements.commandMessage, error.message, "error");
+          }
+        });
+      });
+    }
+
+    function renderCommandAction(command) {
+      if (command.status === "pending" || command.status === "received") {
+        return `<button class="button warn" data-cancel-command-id="${command.id}">取消</button>`;
+      }
+      return '<span class="meta">-</span>';
+    }
+
+    function renderCommandResult(command) {
+      const resultLines = [];
+      resultLines.push(`当前状态：${statusText(command.status)}`);
+      if (command.received_at) {
+        resultLines.push(`接收时间：${formatDate(command.received_at)}`);
+      }
+      if (command.completed_at) {
+        resultLines.push(`完成时间：${formatDate(command.completed_at)}`);
+      }
+      if (command.error_message) {
+        resultLines.push(`失败原因：${command.error_message}`);
+      }
+
+      const latestLog = Array.isArray(command.logs) && command.logs.length ? command.logs[command.logs.length - 1] : null;
+      if (latestLog && latestLog.message) {
+        resultLines.push(`最近反馈：${latestLog.message}`);
+      }
+
+      return `<pre>${escapeHtml(resultLines.join("\n"))}</pre>`;
+    }
+
+    function renderCommandLogs(command) {
+      if (!Array.isArray(command.logs) || !command.logs.length) {
+        return '<span class="meta">暂无日志</span>';
+      }
+
+      const recentLogs = command.logs.slice(-3).map((log) => {
+        const logLines = [`[${statusText(log.status)}] ${formatDate(log.created_at)}`];
+        if (log.message) {
+          logLines.push(log.message);
+        }
+        if (log.raw && Object.keys(log.raw).length) {
+          logLines.push(prettyJson(log.raw));
+        }
+        return logLines.join("\n");
+      });
+
+      return `<pre>${escapeHtml(recentLogs.join("\n\n"))}</pre>`;
+    }
+
+    function renderSnapshotOverview() {
+      const snapshot = state.snapshots[0];
+      if (!snapshot) {
+        elements.snapshotOverviewTime.textContent = "暂无快照";
+        elements.snapshotOverviewCards.innerHTML = '<div class="empty" style="grid-column: 1 / -1;">当前还没有快照概览。</div>';
+        elements.snapshotOverviewRaw.textContent = "暂无原始摘要。";
+        return;
+      }
+
+      elements.snapshotOverviewTime.textContent = `最近快照：${formatDate(snapshot.created_at)}`;
+      const cards = [
+        { label: "币种", value: snapshot.currency || "-" },
+        { label: "盈亏", value: formatNumber(snapshot.profit) },
+        { label: "保证金占用", value: formatNumber(snapshot.margin) },
+        { label: "可用保证金", value: formatNumber(snapshot.free_margin) },
+        { label: "保证金水平", value: formatNumber(snapshot.margin_level) },
+        { label: "持仓数量", value: String(state.positions.length) }
+      ];
+
+      elements.snapshotOverviewCards.innerHTML = cards.map((card) => `
+        <div class="mini-item">
+          <div class="label">${escapeHtml(card.label)}</div>
+          <div class="value">${escapeHtml(card.value)}</div>
+        </div>
+      `).join("");
+      elements.snapshotOverviewRaw.textContent = prettyJson(snapshot.raw || {});
+    }
+
+    function renderCommandTimeline() {
+      elements.commandTimelineCount.textContent = `${state.commands.length} 条`;
+      if (!state.commands.length) {
+        elements.commandTimeline.innerHTML = '<div class="empty">当前还没有命令时间线。</div>';
+        return;
+      }
+
+      const timelineCommands = state.commands.slice(0, 5);
+      elements.commandTimeline.innerHTML = timelineCommands.map((command) => {
+        const latestLog = Array.isArray(command.logs) && command.logs.length ? command.logs[command.logs.length - 1] : null;
+        return `
+          <div class="timeline-item">
+            <div class="timeline-head">
+              <div class="timeline-title">${escapeHtml(commandTypeText(command.command_type))}</div>
+              <span class="${badgeClass(command.status)}">${escapeHtml(statusText(command.status))}</span>
+            </div>
+            <div class="meta">创建时间：${escapeHtml(formatDate(command.created_at))}</div>
+            <div class="meta">过期时间：${escapeHtml(formatDate(command.expires_at))}</div>
+            <div class="meta">操作人：${escapeHtml(command.requested_by || "-")}</div>
+            <div class="meta">命令编号：${escapeHtml(String(command.id))}</div>
+            <div class="meta">最近日志：${escapeHtml(latestLog?.message || command.error_message || "暂无反馈")}</div>
+            ${command.completed_at ? `<div class="meta">完成时间：${escapeHtml(formatDate(command.completed_at))}</div>` : ""}
+            ${renderCommandFlow(command)}
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderCommandFlow(command) {
+      const flowSteps = [
+        { key: "pending", label: "待下发" },
+        { key: "received", label: "已接收" },
+        { key: "executing", label: "执行中" },
+        { key: "success", label: "成功" }
+      ];
+      const terminalOverrides = {
+        failed: "失败",
+        timeout: "超时",
+        cancelled: "已取消"
+      };
+      const currentStatus = String(command.status || "").toLowerCase();
+      const baseOrder = { pending: 0, received: 1, executing: 2, success: 3 };
+      const currentIndex = baseOrder[currentStatus] ?? 3;
+
+      const stepsHtml = flowSteps.map((step, index) => {
+        let classes = "flow-step";
+        let label = step.label;
+        if (index < currentIndex) {
+          classes += " done";
+        }
+        if (step.key === currentStatus) {
+          classes += " active";
+        }
+        if (index === 3 && terminalOverrides[currentStatus]) {
+          classes += " active";
+          label = terminalOverrides[currentStatus];
+        }
+        return `<span class="${classes}">${escapeHtml(label)}</span>`;
+      }).join("");
+
+      return `<div class="flow">${stepsHtml}</div>`;
+    }
+
+    function renderTransitionFeed() {
+      const activities = state.activityFeed || [];
+      elements.transitionFeedCount.textContent = `${activities.length} 条`;
+      if (!activities.length) {
+        elements.transitionFeed.innerHTML = '<div class="empty">当前还没有新的状态流转动态。</div>';
+        return;
+      }
+
+      elements.transitionFeed.innerHTML = activities.map((item) => `
+        <div class="activity-item ${escapeHtml(item.level)}">
+          <div class="activity-head">
+            <strong>${escapeHtml(item.message)}</strong>
+            <span class="meta">${escapeHtml(formatDate(item.createdAt))}</span>
+          </div>
+          <div class="meta">${escapeHtml(item.details || "无补充说明")}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderAuditLogs() {
+      const rows = state.auditLogs || [];
+      elements.auditLogCount.textContent = `${rows.length} 条`;
+      if (!rows.length) {
+        elements.auditLogFeed.innerHTML = '<div class="empty">当前还没有审计日志。</div>';
+        return;
+      }
+      elements.auditLogFeed.innerHTML = rows.map((row) => `
+        <div class="activity-item info">
+          <div class="activity-head">
+            <strong>${escapeHtml(row.action)} · ${escapeHtml(row.resource_type)}${row.resource_id ? ` · ${escapeHtml(row.resource_id)}` : ""}</strong>
+            <span class="meta">${escapeHtml(formatDate(row.created_at))}</span>
+          </div>
+          <div class="meta">操作人：${escapeHtml(row.actor)}（${escapeHtml(row.actor_role || "-")}）</div>
+          <pre class="meta">${escapeHtml(prettyJson(row.details || {}))}</pre>
+        </div>
+      `).join("");
+    }
+
+    function prettyJson(value) {
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch (error) {
+        return String(value);
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function fillCommandExample() {
+      renderCommandForm(true);
+    }
+
+    async function loadEas() {
+      const previousEas = [...state.eas];
+      const eas = await api("/api/admin/eas");
+      state.eas = eas;
+      detectEaTransitions(previousEas, state.eas);
+      if (state.selectedEaId && !state.eas.some((ea) => ea.ea_id === state.selectedEaId)) {
+        state.selectedEaId = null;
+      }
+      renderEaList();
+      renderSummary();
+      renderGlobalStatus();
+      renderGlobalRisks();
+    }
+
+    async function loadPositions(eaId) {
+      state.positions = eaId ? await api(`/api/admin/eas/${encodeURIComponent(eaId)}/positions`) : [];
+      renderPositions();
+      renderSummary();
+    }
+
+    async function loadSnapshots(eaId) {
+      state.snapshots = eaId ? await api(`/api/admin/eas/${encodeURIComponent(eaId)}/snapshots?limit=20`) : [];
+      renderSnapshots();
+      renderSummary();
+    }
+
+    async function loadCommands(eaId) {
+      const previousCommands = [...state.commands];
+      const query = eaId ? `?ea_id=${encodeURIComponent(eaId)}` : "";
+      state.commands = await api(`/api/admin/commands${query}`);
+      detectCommandTransitions(previousCommands, state.commands);
+      renderCommands();
+      renderGlobalStatus();
+      renderGlobalRisks();
+    }
+
+    async function loadGlobalCommands() {
+      state.globalCommands = await api("/api/admin/commands");
+      renderGlobalStatus();
+      renderGlobalRisks();
+    }
+
+    async function loadAuditLogs() {
+      state.auditLogs = await api("/api/admin/audit-logs?limit=20");
+      renderAuditLogs();
+    }
+
+    async function loadSafetyConfig() {
+      state.safetyConfig = await api("/api/admin/safety-config");
+      renderSafetyConfig();
+    }
+
+    async function loadSystemChecks() {
+      state.systemChecks = await api("/api/admin/system-checks");
+      renderSystemChecks();
+    }
+
+    async function selectEa(eaId) {
+      state.selectedEaId = eaId;
+      renderEaList();
+      renderSummary();
+      if (!eaId) {
+        state.positions = [];
+        state.snapshots = [];
+        state.commands = [];
+        renderPositions();
+        renderSnapshots();
+        renderCommands();
+        return;
+      }
+      try {
+        await Promise.all([loadPositions(eaId), loadSnapshots(eaId), loadCommands(eaId)]);
+      } catch (error) {
+        showMessage(elements.commandMessage, error.message, "error");
+      }
+    }
+
+    async function refreshAll(silent = false) {
+      if (!silent) {
+        clearMessage(elements.tokenMessage);
+      }
+
+      await loadEas();
+      await Promise.all([loadAuditLogs(), loadGlobalCommands(), loadSafetyConfig(), loadSystemChecks()]);
+
+      if (!silent) {
+        showMessage(elements.tokenMessage, "数据已刷新。", "ok");
+      }
+    }
+
+    async function sendCommand() {
+      clearMessage(elements.commandMessage);
+      if (!state.selectedEaId) {
+        showMessage(elements.commandMessage, "请先选择一个 EA。", "error");
+        return;
+      }
+
+      try {
+        const payload = buildPayloadFromForm(true);
+        elements.commandPayload.value = JSON.stringify(payload, null, 2);
+
+        const request = {
+          ea_id: state.selectedEaId,
+          command_type: elements.commandType.value,
+          requested_by: elements.requestedBy.value.trim() || "admin-ui",
+          payload
+        };
+
+        const created = await api("/api/admin/commands", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request)
+        });
+        showMessage(elements.commandMessage, `命令 ${created.id} 已创建，当前状态：${statusText(created.status)}。`, "ok");
+        await loadCommands(state.selectedEaId);
+      } catch (error) {
+        showMessage(elements.commandMessage, error.message, "error");
+      }
+    }
+
+    function persistToken() {
+      localStorage.setItem("ea-admin-token", getToken());
+      showMessage(elements.tokenMessage, "Token 已保存到当前浏览器。", "ok");
+    }
+
+    function loadPersistedToken() {
+      const token = localStorage.getItem("ea-admin-token");
+      if (token) {
+        elements.adminToken.value = token;
+      }
+    }
+
+    document.getElementById("saveTokenBtn").addEventListener("click", persistToken);
+    document.getElementById("loginBtn").addEventListener("click", async () => {
+      clearMessage(elements.tokenMessage);
+      const username = elements.loginUsername.value.trim();
+      const password = elements.loginPassword.value;
+      if (!username || !password) {
+        showMessage(elements.tokenMessage, "请输入用户名和密码。", "error");
+        return;
+      }
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          showMessage(elements.tokenMessage, apiErrorMessage(text, res.status), "error");
+          return;
+        }
+        const data = JSON.parse(text);
+        setStoredJwt(data.access_token);
+        localStorage.setItem("ea-admin-user", `${data.user.username}（${data.user.role}）`);
+        elements.loginPassword.value = "";
+        updateAuthSessionUI();
+        showMessage(elements.tokenMessage, "登录成功，已保存 JWT。", "ok");
+        await refreshAll(false);
+      } catch (error) {
+        showMessage(elements.tokenMessage, error.message || "登录失败", "error");
+      }
+    });
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+      setStoredJwt("");
+      localStorage.removeItem("ea-admin-user");
+      updateAuthSessionUI();
+      showMessage(elements.tokenMessage, "已退出 JWT 登录。", "info");
+    });
+    document.getElementById("refreshBtn").addEventListener("click", async () => {
+      try {
+        await refreshAll(false);
+      } catch (error) {
+        showMessage(elements.tokenMessage, error.message, "error");
+      }
+    });
+    document.getElementById("reloadSelectedBtn").addEventListener("click", () => selectEa(state.selectedEaId));
+    document.getElementById("reloadCommandsBtn").addEventListener("click", () => loadCommands(state.selectedEaId));
+    document.getElementById("fillExampleBtn").addEventListener("click", fillCommandExample);
+    document.getElementById("sendCommandBtn").addEventListener("click", sendCommand);
+    elements.commandType.addEventListener("change", () => renderCommandForm(true));
+    elements.autoRefreshEnabled.addEventListener("change", () => {
+      persistAutoRefreshSettings();
+      startAutoRefresh();
+    });
+    elements.autoRefreshInterval.addEventListener("change", () => {
+      persistAutoRefreshSettings();
+      startAutoRefresh();
+    });
+
+    loadPersistedToken();
+    updateAuthSessionUI();
+    loadAutoRefreshSettings();
+    renderCommandForm(true);
+    renderTransitionFeed();
+    startAutoRefresh();
+  </script>
+</body>
+</html>

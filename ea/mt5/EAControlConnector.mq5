@@ -4,13 +4,13 @@
 
 #include <Trade/Trade.mqh>
 
-input string InpApiBaseUrl = "http://47.86.170.144";
-input string InpEaToken = "change_this_ea_token";
-input string InpEaId = "mt5-ea-001";
+input string InpApiBaseUrl = "http://127.0.0.1:8000";
+input string InpEaToken = "ea123456";
+input string InpEaId = ""; // Leave empty to auto-generate: mt5-{account}-{server}-{magic}
 input int InpRequestTimeoutMs = 5000;
-input int InpHeartbeatIntervalSec = 10;
-input int InpSnapshotIntervalSec = 15;
-input int InpCommandPollIntervalSec = 5;
+input int InpHeartbeatIntervalSec = 5;
+input int InpSnapshotIntervalSec = 10;
+input int InpCommandPollIntervalSec = 2;
 input int InpTradeDeviationPoints = 20;
 input long InpMagicNumber = 20260509;
 input bool InpAllowTradingOnStart = true;
@@ -23,6 +23,7 @@ int g_command_poll_interval_sec = 5;
 datetime g_last_heartbeat = 0;
 datetime g_last_snapshot = 0;
 datetime g_last_command_poll = 0;
+string g_effective_ea_id = "";
 
 void LogMessage(string message)
 {
@@ -38,9 +39,119 @@ string EscapeJson(string value)
    return value;
 }
 
+string SlugPart(string value, string fallback)
+{
+   string result = value;
+   StringToLower(result);
+   StringTrimLeft(result);
+   StringTrimRight(result);
+   string output = "";
+   bool last_dash = false;
+   for(int i = 0; i < StringLen(result); i++)
+   {
+      ushort ch = StringGetCharacter(result, i);
+      bool ok = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '_' || ch == ':' || ch == '-';
+      if(ok)
+      {
+         output += ShortToString(ch);
+         last_dash = (ch == '-');
+      }
+      else if(!last_dash && StringLen(output) > 0)
+      {
+         output += "-";
+         last_dash = true;
+      }
+   }
+   while(StringLen(output) > 0 && StringSubstr(output, StringLen(output) - 1, 1) == "-")
+      output = StringSubstr(output, 0, StringLen(output) - 1);
+   if(StringLen(output) == 0)
+      output = fallback;
+   return output;
+}
+
+string BuildEffectiveEaId()
+{
+   if(StringLen(InpEaId) > 0)
+      return SlugPart(InpEaId, "mt5-manual");
+   string account = (string)AccountInfoInteger(ACCOUNT_LOGIN);
+   string server = AccountInfoString(ACCOUNT_SERVER);
+   return "mt5-" + SlugPart(account, "account") + "-" + SlugPart(server, "server") + "-" + IntegerToString((int)InpMagicNumber);
+}
+
 string BoolToJson(bool value)
 {
    return value ? "true" : "false";
+}
+
+bool IsAlphaNum(ushort ch)
+{
+   return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
+}
+
+bool SymbolAliasMatches(string requested, string candidate)
+{
+   string req = requested;
+   string cand = candidate;
+   StringTrimLeft(req);
+   StringTrimRight(req);
+   StringTrimLeft(cand);
+   StringTrimRight(cand);
+   StringToUpper(req);
+   StringToUpper(cand);
+
+   if(req == cand)
+      return true;
+
+   int req_len = StringLen(req);
+   if(req_len <= 0 || StringLen(cand) <= req_len)
+      return false;
+
+   if(StringSubstr(cand, 0, req_len) != req)
+      return false;
+
+   ushort next_ch = StringGetCharacter(cand, req_len);
+   return !IsAlphaNum(next_ch);
+}
+
+bool ResolveTradeSymbol(string requested, string &resolved, string &note)
+{
+   string req = requested;
+   StringTrimLeft(req);
+   StringTrimRight(req);
+   resolved = req;
+   note = "";
+
+   if(req == "")
+      return false;
+
+   if(SymbolSelect(req, true))
+      return true;
+
+   if(SymbolAliasMatches(req, _Symbol) && SymbolSelect(_Symbol, true))
+   {
+      resolved = _Symbol;
+      note = " mapped_symbol=" + req + "->" + resolved;
+      return true;
+   }
+
+   for(int selected = 1; selected >= 0; selected--)
+   {
+      bool selected_only = (selected == 1);
+      int total = SymbolsTotal(selected_only);
+      for(int i = 0; i < total; i++)
+      {
+         string candidate = SymbolName(i, selected_only);
+         if(SymbolAliasMatches(req, candidate) && SymbolSelect(candidate, true))
+         {
+            resolved = candidate;
+            note = " mapped_symbol=" + req + "->" + resolved;
+            return true;
+         }
+      }
+   }
+
+   resolved = req;
+   return false;
 }
 
 int SkipWhitespace(string text, int pos)
@@ -223,7 +334,7 @@ string BuildResultRaw(string command_type, string detail)
 {
    string raw =
       "{"
-      "\"command_type\":\"" + EscapeJson(command_type) + "\"," 
+      "\"command_type\":\"" + EscapeJson(command_type) + "\","
       + "\"detail\":\"" + EscapeJson(detail) + "\""
       + "}";
    return raw;
@@ -278,13 +389,13 @@ bool SendHeartbeat()
 
    string payload =
       "{"
-      "\"ea_id\":\"" + EscapeJson(InpEaId) + "\"," 
-      + "\"account_number\":\"" + EscapeJson(account) + "\"," 
-      + "\"broker\":\"" + EscapeJson(broker) + "\"," 
-      + "\"terminal\":\"MT5\"," 
-      + "\"strategy_name\":\"" + EscapeJson(strategy_name) + "\"," 
-      + "\"version\":\"" + EscapeJson(version) + "\"," 
-      + "\"status\":\"online\"," 
+      "\"ea_id\":\"" + EscapeJson(g_effective_ea_id) + "\","
+      + "\"account_number\":\"" + EscapeJson(account) + "\","
+      + "\"broker\":\"" + EscapeJson(broker) + "\","
+      + "\"terminal\":\"MT5\","
+      + "\"strategy_name\":\"" + EscapeJson(strategy_name) + "\","
+      + "\"version\":\"" + EscapeJson(version) + "\","
+      + "\"status\":\"online\","
       + "\"allow_trading\":" + BoolToJson(g_allow_trading)
       + "}";
 
@@ -293,7 +404,7 @@ bool SendHeartbeat()
    if(!SendApiRequest("POST", "/api/ea/heartbeat", payload, status, body))
       return false;
 
-   LogMessage("Heartbeat accepted for " + InpEaId);
+   LogMessage("Heartbeat accepted for " + g_effective_ea_id);
    return true;
 }
 
@@ -301,8 +412,8 @@ string BuildPositionRawJson(ulong ticket, string symbol, long type)
 {
    string raw =
       "{"
-      "\"ticket\":\"" + (string)ticket + "\"," 
-      + "\"symbol\":\"" + EscapeJson(symbol) + "\"," 
+      "\"ticket\":\"" + (string)ticket + "\","
+      + "\"symbol\":\"" + EscapeJson(symbol) + "\","
       + "\"position_type\":" + IntegerToString((int)type)
       + "}";
    return raw;
@@ -340,9 +451,9 @@ string BuildPositionsJson()
 
       string item =
          "{"
-         "\"ticket\":\"" + (string)ticket + "\"," 
-         + "\"symbol\":\"" + EscapeJson(symbol) + "\"," 
-         + "\"side\":\"" + side + "\"," 
+         "\"ticket\":\"" + (string)ticket + "\","
+         + "\"symbol\":\"" + EscapeJson(symbol) + "\","
+         + "\"side\":\"" + side + "\","
          + "\"volume\":" + DoubleToString(volume, 2) + ","
          + "\"open_price\":" + DoubleToString(open_price, digits) + ","
          + "\"current_price\":" + DoubleToString(current_price, digits) + ","
@@ -377,16 +488,16 @@ bool SendSnapshot()
 
    string raw =
       "{"
-      "\"company\":\"" + EscapeJson(AccountInfoString(ACCOUNT_COMPANY)) + "\"," 
-      + "\"server\":\"" + EscapeJson(AccountInfoString(ACCOUNT_SERVER)) + "\"," 
+      "\"company\":\"" + EscapeJson(AccountInfoString(ACCOUNT_COMPANY)) + "\","
+      + "\"server\":\"" + EscapeJson(AccountInfoString(ACCOUNT_SERVER)) + "\","
       + "\"leverage\":" + IntegerToString((int)AccountInfoInteger(ACCOUNT_LEVERAGE))
       + "}";
 
    string payload =
       "{"
-      "\"ea_id\":\"" + EscapeJson(InpEaId) + "\"," 
-      + "\"account_number\":\"" + EscapeJson(account) + "\"," 
-      + "\"currency\":\"" + EscapeJson(currency) + "\"," 
+      "\"ea_id\":\"" + EscapeJson(g_effective_ea_id) + "\","
+      + "\"account_number\":\"" + EscapeJson(account) + "\","
+      + "\"currency\":\"" + EscapeJson(currency) + "\","
       + "\"balance\":" + DoubleToString(balance, 2) + ","
       + "\"equity\":" + DoubleToString(equity, 2) + ","
       + "\"margin\":" + DoubleToString(margin, 2) + ","
@@ -458,6 +569,31 @@ bool ClosePositionByTicketText(string ticket_text, string &message)
    return true;
 }
 
+bool CancelPendingOrderByTicketText(string ticket_text, string &message)
+{
+   ulong ticket = (ulong)StringToInteger(ticket_text);
+   if(ticket == 0)
+   {
+      message = "invalid order ticket";
+      return false;
+   }
+
+   if(!OrderSelect(ticket))
+   {
+      message = "pending order not found";
+      return false;
+   }
+
+   if(!g_trade.OrderDelete(ticket))
+   {
+      message = "cancel order failed retcode=" + IntegerToString((int)g_trade.ResultRetcode());
+      return false;
+   }
+
+   message = "pending order cancelled";
+   return true;
+}
+
 bool CloseAllPositions(string &message)
 {
    bool ok = true;
@@ -488,9 +624,11 @@ bool CloseAllPositions(string &message)
 
 bool ClosePositionsBySymbol(string symbol, string &message)
 {
-   if(symbol == "")
+   string resolved_symbol = "";
+   string symbol_note = "";
+   if(!ResolveTradeSymbol(symbol, resolved_symbol, symbol_note))
    {
-      message = "missing symbol";
+      message = (symbol == "" ? "missing symbol" : "failed to select symbol");
       return false;
    }
 
@@ -506,7 +644,7 @@ bool ClosePositionsBySymbol(string symbol, string &message)
          continue;
       if(!PositionSelectByTicket(ticket))
          continue;
-      if(PositionGetString(POSITION_SYMBOL) != symbol)
+      if(PositionGetString(POSITION_SYMBOL) != resolved_symbol)
          continue;
 
       found = true;
@@ -527,12 +665,105 @@ bool ClosePositionsBySymbol(string symbol, string &message)
       return false;
    }
 
-   message = "symbol=" + symbol + ", closed=" + IntegerToString(closed) + ", failed=" + IntegerToString(failed);
+   message = "symbol=" + resolved_symbol + symbol_note + ", closed=" + IntegerToString(closed) + ", failed=" + IntegerToString(failed);
    return ok;
+}
+
+bool OpenPendingOrder(string payload_json, string &message)
+{
+   string symbol = "";
+   string side = "";
+   string order_type = "";
+   string volume_text = "";
+   string price_text = "";
+   string comment = "EAControlConnector";
+   string sl_text = "";
+   string tp_text = "";
+
+   if(!JsonGetString(payload_json, "symbol", symbol))
+   {
+      message = "missing symbol";
+      return false;
+   }
+   if(!JsonGetString(payload_json, "side", side))
+      side = "";
+   JsonGetString(payload_json, "order_type", order_type);
+   if(!JsonGetNumberText(payload_json, "volume", volume_text))
+   {
+      message = "missing volume";
+      return false;
+   }
+   if(!JsonGetNumberText(payload_json, "price", price_text) && !JsonGetNumberText(payload_json, "entry_price", price_text))
+   {
+      message = "missing pending price";
+      return false;
+   }
+   JsonGetString(payload_json, "comment", comment);
+   JsonGetNumberText(payload_json, "sl", sl_text);
+   JsonGetNumberText(payload_json, "tp", tp_text);
+
+   string resolved_symbol = "";
+   string symbol_note = "";
+   if(!ResolveTradeSymbol(symbol, resolved_symbol, symbol_note))
+   {
+      message = "failed to select symbol";
+      return false;
+   }
+
+   double volume = StringToDouble(volume_text);
+   if(volume <= 0)
+   {
+      message = "invalid volume";
+      return false;
+   }
+
+   int digits = (int)SymbolInfoInteger(resolved_symbol, SYMBOL_DIGITS);
+   double price = NormalizeDouble(StringToDouble(price_text), digits);
+   if(price <= 0)
+   {
+      message = "invalid pending price";
+      return false;
+   }
+   double sl = (sl_text == "" ? 0.0 : NormalizeDouble(StringToDouble(sl_text), digits));
+   double tp = (tp_text == "" ? 0.0 : NormalizeDouble(StringToDouble(tp_text), digits));
+
+   g_trade.SetDeviationInPoints(InpTradeDeviationPoints);
+   g_trade.SetExpertMagicNumber(InpMagicNumber);
+
+   bool result = false;
+   if(order_type == "")
+      order_type = side == "sell" ? "sell_limit" : "buy_limit";
+
+   if(order_type == "buy_limit")
+      result = g_trade.BuyLimit(volume, price, resolved_symbol, sl, tp, ORDER_TIME_GTC, 0, comment);
+   else if(order_type == "sell_limit")
+      result = g_trade.SellLimit(volume, price, resolved_symbol, sl, tp, ORDER_TIME_GTC, 0, comment);
+   else if(order_type == "buy_stop")
+      result = g_trade.BuyStop(volume, price, resolved_symbol, sl, tp, ORDER_TIME_GTC, 0, comment);
+   else if(order_type == "sell_stop")
+      result = g_trade.SellStop(volume, price, resolved_symbol, sl, tp, ORDER_TIME_GTC, 0, comment);
+   else
+   {
+      message = "unsupported pending order_type";
+      return false;
+   }
+
+   if(!result)
+   {
+      message = "pending order failed retcode=" + IntegerToString((int)g_trade.ResultRetcode());
+      return false;
+   }
+
+   message = "pending order placed symbol=" + resolved_symbol + symbol_note + ", type=" + order_type + ", volume=" + DoubleToString(volume, 2);
+   return true;
 }
 
 bool OpenMarketOrder(string payload_json, string &message)
 {
+   string order_mode = "";
+   if(JsonGetString(payload_json, "order_mode", order_mode) && order_mode == "pending")
+      return OpenPendingOrder(payload_json, message);
+
    string symbol = "";
    string side = "";
    string volume_text = "";
@@ -559,7 +790,9 @@ bool OpenMarketOrder(string payload_json, string &message)
    JsonGetNumberText(payload_json, "sl", sl_text);
    JsonGetNumberText(payload_json, "tp", tp_text);
 
-   if(!SymbolSelect(symbol, true))
+   string resolved_symbol = "";
+   string symbol_note = "";
+   if(!ResolveTradeSymbol(symbol, resolved_symbol, symbol_note))
    {
       message = "failed to select symbol";
       return false;
@@ -572,7 +805,7 @@ bool OpenMarketOrder(string payload_json, string &message)
       return false;
    }
 
-   int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+   int digits = (int)SymbolInfoInteger(resolved_symbol, SYMBOL_DIGITS);
    double sl = (sl_text == "" ? 0.0 : NormalizeDouble(StringToDouble(sl_text), digits));
    double tp = (tp_text == "" ? 0.0 : NormalizeDouble(StringToDouble(tp_text), digits));
 
@@ -581,9 +814,9 @@ bool OpenMarketOrder(string payload_json, string &message)
 
    bool result = false;
    if(side == "buy")
-      result = g_trade.Buy(volume, symbol, 0.0, sl, tp, comment);
+      result = g_trade.Buy(volume, resolved_symbol, 0.0, sl, tp, comment);
    else if(side == "sell")
-      result = g_trade.Sell(volume, symbol, 0.0, sl, tp, comment);
+      result = g_trade.Sell(volume, resolved_symbol, 0.0, sl, tp, comment);
    else
    {
       message = "unsupported side";
@@ -596,7 +829,7 @@ bool OpenMarketOrder(string payload_json, string &message)
       return false;
    }
 
-   message = "order placed symbol=" + symbol + ", side=" + side + ", volume=" + DoubleToString(volume, 2);
+   message = "order placed symbol=" + resolved_symbol + symbol_note + ", side=" + side + ", volume=" + DoubleToString(volume, 2);
    return true;
 }
 
@@ -661,7 +894,7 @@ bool SubmitCommandResult(int command_id, string status_text, string message, str
 {
    string payload =
       "{"
-      "\"status\":\"" + status_text + "\"," 
+      "\"status\":\"" + status_text + "\","
       + "\"message\":\"" + EscapeJson(message) + "\"";
 
    if(raw_json != "")
@@ -718,6 +951,25 @@ void ExecuteCommand(int command_id, string command_type, string payload_json)
       else
          message = "missing ticket";
    }
+   else if(command_type == "cancel_order")
+   {
+      string ticket = "";
+      if(JsonGetString(payload_json, "ticket", ticket) || JsonGetNumberText(payload_json, "ticket", ticket)
+         || JsonGetString(payload_json, "order_ticket", ticket) || JsonGetNumberText(payload_json, "order_ticket", ticket))
+         success = CancelPendingOrderByTicketText(ticket, message);
+      else
+         message = "missing order ticket";
+   }
+   else if(command_type == "manual_manage")
+   {
+      success = true;
+      message = "manual management marker acknowledged";
+   }
+   else if(command_type == "manual_release")
+   {
+      success = true;
+      message = "manual management release marker acknowledged";
+   }
    else if(command_type == "open_order")
    {
       success = OpenMarketOrder(payload_json, message);
@@ -743,7 +995,7 @@ bool PollAndExecuteCommands()
 {
    int status = 0;
    string body = "";
-   string path = "/api/ea/commands?ea_id=" + InpEaId;
+   string path = "/api/ea/commands?ea_id=" + g_effective_ea_id;
 
    if(!SendApiRequest("GET", path, "", status, body))
       return false;
@@ -771,12 +1023,13 @@ int OnInit()
    g_heartbeat_interval_sec = MathMax(1, InpHeartbeatIntervalSec);
    g_snapshot_interval_sec = MathMax(1, InpSnapshotIntervalSec);
    g_command_poll_interval_sec = MathMax(1, InpCommandPollIntervalSec);
+   g_effective_ea_id = BuildEffectiveEaId();
 
    g_trade.SetDeviationInPoints(InpTradeDeviationPoints);
    g_trade.SetExpertMagicNumber(InpMagicNumber);
 
    EventSetTimer(1);
-   LogMessage("Initialized ea_id=" + InpEaId);
+   LogMessage("Initialized ea_id=" + g_effective_ea_id);
    LogMessage("Allow WebRequest for " + InpApiBaseUrl + " in MT5 terminal settings");
    return(INIT_SUCCEEDED);
 }
@@ -796,7 +1049,7 @@ void OnTick()
 
 void OnTimer()
 {
-   datetime now = TimeCurrent();
+   datetime now = TimeLocal();
 
    if(now - g_last_heartbeat >= g_heartbeat_interval_sec)
    {

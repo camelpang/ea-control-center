@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>用户列表 · EA Control Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111f;
+      --panel: #101a2d;
+      --panel-alt: #17223a;
+      --border: #263653;
+      --text: #e5ecff;
+      --muted: #94a3c7;
+      --accent: #60a5fa;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1100px 520px at 50% -10%, #13264f 0%, var(--bg) 60%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 14px 22px;
+      background: rgba(8, 17, 31, 0.94);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    h1 { margin: 0; font-size: 1.22rem; }
+    h2 { margin: 0 0 12px; font-size: 1rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    main { padding: 18px 22px 36px; display: grid; gap: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+    .wide { grid-column: 1 / -1; }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(16, 26, 45, 0.88);
+      padding: 14px;
+      overflow: hidden;
+    }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .row { display: grid; gap: 9px; margin-bottom: 10px; }
+    .assignment-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto auto auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .user-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) repeat(5, auto);
+      gap: 10px;
+      align-items: center;
+    }
+    .user-form-grid {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 10px;
+    }
+    .input, .select, .button {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-alt);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    .button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #2563eb, #1d4ed8);
+      font-weight: 700;
+    }
+    .button.secondary { background: #334155; }
+    .button.danger { background: linear-gradient(180deg, #dc2626, #991b1b); }
+    .check-row { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 14px; }
+    .check-row label { display: inline-flex; gap: 6px; align-items: center; }
+    .meta { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .message { display: none; padding: 10px 12px; border-radius: 10px; font-size: 14px; }
+    .message.show { display: block; }
+    .message.ok { background: rgba(34, 197, 94, 0.14); color: #86efac; }
+    .message.err { background: rgba(239, 68, 68, 0.14); color: #fecaca; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 9px 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.16); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    .user-table { table-layout: fixed; }
+    .user-table .actions-col { width: 420px; }
+    .actions-cell { vertical-align: middle; }
+    .actions-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+    }
+    .table-button {
+      width: auto;
+      padding: 6px 10px;
+      flex: 0 0 auto;
+    }
+    code { color: #bfdbfe; }
+    .badge {
+      display: inline-flex;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(96, 165, 250, 0.16);
+      color: #bfdbfe;
+      font-size: 12px;
+      margin: 0 4px 4px 0;
+    }
+    .permission-editor {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .permission-editor label { display: inline-flex; gap: 6px; align-items: center; }
+    .empty { padding: 22px; color: var(--muted); text-align: center; }
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: 1fr; }
+      .user-form-grid { grid-template-columns: 1fr; }
+      .assignment-toolbar { grid-template-columns: 1fr; }
+      .user-toolbar { grid-template-columns: 1fr; }
+      .user-table { table-layout: auto; }
+      .user-table .actions-col { width: auto; }
+      .actions-toolbar { flex-wrap: wrap; white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>用户列表</h1>
+      <div class="meta">独立管理用户、用户状态、已有 EA 权限</div>
+    </div>
+    <nav class="toolbar">
+      <a href="/admin">管理控制台</a>
+      <a href="/ea-accounts">EA 账号列表</a>
+      <a href="/dashboard">监控大屏</a>
+      <a href="/manual-trades">人工建仓管理</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>鉴权</h2>
+      <div class="grid" style="grid-template-columns: 1fr 1fr 1fr auto;">
+        <input id="loginUsername" class="input" placeholder="管理员用户名（可选）" />
+        <input id="loginPassword" class="input" type="password" placeholder="密码（可选）" />
+        <input id="adminToken" class="input" type="password" placeholder="X-Admin-Token，例如 admin123456" />
+        <button id="loginBtn" class="button" type="button">登录/保存</button>
+      </div>
+      <div id="msg" class="message" style="margin-top: 10px;"></div>
+      <div class="meta" style="margin-top: 8px;">用户和分配管理需要 admin 权限。</div>
+    </section>
+
+    <section class="panel">
+      <h2>添加用户</h2>
+      <div class="user-form-grid">
+        <input id="newUsername" class="input" placeholder="用户名" />
+        <input id="newPassword" class="input" type="password" placeholder="密码" />
+        <button id="createUserBtn" class="button" type="button">创建 / 更新普通用户</button>
+      </div>
+      <div class="meta">新用户默认创建为普通用户 viewer。需要管理员权限时，可在下方用户列表中调整角色；EA 账号权限请到 <a href="/ea-accounts">EA 账号列表</a> 勾选 EA 后批量分配。</div>
+    </section>
+
+    <section class="panel wide">
+      <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+        <h2 style="margin: 0;">用户列表</h2>
+        <div class="user-toolbar">
+          <input id="userSearch" class="input" placeholder="搜索用户" />
+          <select id="userPageSizeSelect" class="select">
+            <option value="10">每页 10</option>
+            <option value="20" selected>每页 20</option>
+            <option value="50">每页 50</option>
+          </select>
+          <button id="prevUserPageBtn" class="button secondary" type="button" style="width:auto;">上一页</button>
+          <span id="userPageInfo" class="meta">第 1 / 1 页</span>
+          <button id="nextUserPageBtn" class="button secondary" type="button" style="width:auto;">下一页</button>
+          <button id="exportUsersCsvBtn" class="button secondary" type="button" style="width:auto;">导出 CSV</button>
+        </div>
+      </div>
+      <div id="userTable"></div>
+    </section>
+
+    <section id="assignmentSection" class="panel wide">
+      <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+        <h2 style="margin: 0;">当前分配</h2>
+        <div class="assignment-toolbar">
+          <input id="assignmentSearch" class="input" placeholder="搜索 EA / 用户" />
+          <select id="assignmentUserFilter" class="select">
+            <option value="all">全部用户</option>
+          </select>
+          <select id="assignmentEaFilter" class="select">
+            <option value="all">全部 EA</option>
+          </select>
+          <button id="clearAssignmentFiltersBtn" class="button secondary" type="button" style="width:auto;">清空筛选</button>
+        </div>
+      </div>
+      <div id="assignmentTable"></div>
+    </section>
+  </main>
+
+  <script>
+    const els = {
+      msg: document.getElementById("msg"),
+      loginUsername: document.getElementById("loginUsername"),
+      loginPassword: document.getElementById("loginPassword"),
+      adminToken: document.getElementById("adminToken"),
+      newUsername: document.getElementById("newUsername"),
+      newPassword: document.getElementById("newPassword"),
+      userSearch: document.getElementById("userSearch"),
+      userPageSizeSelect: document.getElementById("userPageSizeSelect"),
+      prevUserPageBtn: document.getElementById("prevUserPageBtn"),
+      userPageInfo: document.getElementById("userPageInfo"),
+      nextUserPageBtn: document.getElementById("nextUserPageBtn"),
+      exportUsersCsvBtn: document.getElementById("exportUsersCsvBtn"),
+      assignmentSearch: document.getElementById("assignmentSearch"),
+      assignmentUserFilter: document.getElementById("assignmentUserFilter"),
+      assignmentEaFilter: document.getElementById("assignmentEaFilter"),
+      clearAssignmentFiltersBtn: document.getElementById("clearAssignmentFiltersBtn"),
+      userTable: document.getElementById("userTable"),
+      assignmentTable: document.getElementById("assignmentTable"),
+      assignmentSection: document.getElementById("assignmentSection"),
+    };
+    let users = [];
+    let assignments = [];
+    const editingAssignmentIds = new Set();
+    let initialUserFilterApplied = false;
+    let currentUserPage = 1;
+
+    function show(text, type = "ok") {
+      els.msg.textContent = text;
+      els.msg.className = "message show " + type;
+    }
+    function clearMsg() {
+      els.msg.className = "message";
+      els.msg.textContent = "";
+    }
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+    function getJwt() {
+      return (localStorage.getItem("ea-admin-jwt") || "").trim();
+    }
+    function getToken() {
+      return (localStorage.getItem("ea-admin-token") || "").trim() || els.adminToken.value.trim();
+    }
+    function apiErrorMessage(text, statusCode) {
+      if (!text) return `请求失败：${statusCode}`;
+      try {
+        const parsed = JSON.parse(text);
+        const detail = parsed.detail;
+        if (typeof detail === "string") return detail;
+        if (Array.isArray(detail)) {
+          return detail.map((item) => {
+            const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+            return [location, item.msg].filter(Boolean).join("：");
+          }).join("；");
+        }
+        if (detail) return JSON.stringify(detail);
+      } catch {
+        // Non-JSON response; show the original text.
+      }
+      return text;
+    }
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      const jwt = getJwt();
+      const legacy = getToken();
+      if (jwt) headers.Authorization = "Bearer " + jwt;
+      else if (legacy) headers["X-Admin-Token"] = legacy;
+      else throw new Error("请先登录或填写 X-Admin-Token。");
+      const res = await fetch(path, { ...options, headers });
+      const text = await res.text();
+      if (!res.ok) throw new Error(apiErrorMessage(text, res.status));
+      return text ? JSON.parse(text) : null;
+    }
+    async function loginOrSave() {
+      const username = els.loginUsername.value.trim();
+      const password = els.loginPassword.value;
+      if (username && password) {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const text = await res.text();
+        if (!res.ok) throw new Error(apiErrorMessage(text, res.status));
+        const data = JSON.parse(text);
+        localStorage.setItem("ea-admin-jwt", data.access_token);
+        localStorage.setItem("ea-admin-user", `${data.user.username}（${data.user.role}）`);
+        els.loginPassword.value = "";
+        show("JWT 登录成功。");
+      } else {
+        localStorage.setItem("ea-admin-token", els.adminToken.value.trim());
+        show("Token 已保存。");
+      }
+      await loadAll();
+    }
+    function matches(value, query) {
+      return String(value ?? "").toLowerCase().includes(query);
+    }
+    function optionList(values, selected, allLabel) {
+      return [`<option value="all">${escapeHtml(allLabel)}</option>`]
+        .concat(values.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`))
+        .join("");
+    }
+    function renderAssignmentFilters() {
+      const selectedUser = els.assignmentUserFilter.value || "all";
+      const selectedEa = els.assignmentEaFilter.value || "all";
+      const usernames = [...new Set(users.map((u) => u.username))].sort();
+      const eaIds = [...new Set(assignments.map((a) => a.ea_id))].sort();
+      els.assignmentUserFilter.innerHTML = optionList(usernames, selectedUser, "全部用户");
+      els.assignmentEaFilter.innerHTML = optionList(eaIds, selectedEa, "全部 EA");
+    }
+    function initialUserFromUrl() {
+      return new URLSearchParams(window.location.search).get("user") || "";
+    }
+    function applyInitialUserFilter() {
+      const username = initialUserFromUrl();
+      if (initialUserFilterApplied || !username) return;
+      initialUserFilterApplied = true;
+      els.assignmentSearch.value = "";
+      els.assignmentUserFilter.value = username;
+      els.assignmentEaFilter.value = "all";
+      const count = assignments.filter((a) => a.username === username).length;
+      show(count ? `已自动筛选 ${username} 的 ${count} 条 EA 分配。` : `${username} 暂无 EA 分配。`);
+      setTimeout(() => els.assignmentSection.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    }
+    function clearAssignmentFilters() {
+      els.assignmentSearch.value = "";
+      els.assignmentUserFilter.value = "all";
+      els.assignmentEaFilter.value = "all";
+      editingAssignmentIds.clear();
+      history.replaceState(null, "", window.location.pathname);
+      renderAssignments();
+      show("当前分配筛选已清空。");
+    }
+    function permissionBadges(a) {
+      const badges = [];
+      if (a.can_view) badges.push('<span class="badge">可查看</span>');
+      if (a.can_trade) badges.push('<span class="badge">可交易</span>');
+      if (a.is_primary_operator) badges.push('<span class="badge">主操作者</span>');
+      return badges.join("") || '<span class="meta">无权限</span>';
+    }
+    function permissionText(a) {
+      const parts = [];
+      if (a.can_view) parts.push("可查看");
+      if (a.can_trade) parts.push("可交易");
+      if (a.is_primary_operator) parts.push("主操作者");
+      return parts.join(" / ") || "无权限";
+    }
+    function visibleUsers() {
+      const q = els.userSearch.value.trim().toLowerCase();
+      return users.filter((u) => !q || [u.username, u.role].some((v) => matches(v, q)));
+    }
+    function userPageSize() {
+      return Number(els.userPageSizeSelect.value) || 20;
+    }
+    function pagedUsers(rows) {
+      const totalPages = Math.max(1, Math.ceil(rows.length / userPageSize()));
+      currentUserPage = Math.min(Math.max(1, currentUserPage), totalPages);
+      const start = (currentUserPage - 1) * userPageSize();
+      return rows.slice(start, start + userPageSize());
+    }
+    function updateUserPagination(rows) {
+      const totalPages = Math.max(1, Math.ceil(rows.length / userPageSize()));
+      els.userPageInfo.textContent = `第 ${currentUserPage} / ${totalPages} 页（共 ${rows.length} 个）`;
+      els.prevUserPageBtn.disabled = currentUserPage <= 1;
+      els.nextUserPageBtn.disabled = currentUserPage >= totalPages;
+    }
+    function assignmentSummaryForUser(username) {
+      const rows = assignments.filter((a) => a.username === username);
+      if (!rows.length) return "未分配";
+      return rows.map((a) => `${a.ea_id}（${permissionText(a)}）`).join("；");
+    }
+    function primaryConflictNote(a) {
+      const currentPrimary = assignments.find((row) =>
+        row.ea_id === a.ea_id &&
+        row.id !== a.id &&
+        row.is_primary_operator
+      );
+      return currentPrimary
+        ? `<div class="meta">当前主操作者：${escapeHtml(currentPrimary.username)}，勾选主操作者会冲突。</div>`
+        : "";
+    }
+    function permissionCell(a) {
+      if (!editingAssignmentIds.has(String(a.id))) return permissionBadges(a);
+      return `
+        <div class="permission-editor">
+          <label><input type="checkbox" data-assignment-view="${escapeHtml(a.id)}" ${a.can_view ? "checked" : ""} /> 可查看</label>
+          <label><input type="checkbox" data-assignment-trade="${escapeHtml(a.id)}" ${a.can_trade ? "checked" : ""} /> 可交易</label>
+          <label><input type="checkbox" data-assignment-primary="${escapeHtml(a.id)}" ${a.is_primary_operator ? "checked" : ""} /> 主操作者</label>
+          ${primaryConflictNote(a)}
+        </div>
+      `;
+    }
+    function renderUsers() {
+      const list = visibleUsers();
+      const pageRows = pagedUsers(list);
+      updateUserPagination(list);
+      if (!list.length) {
+        els.userTable.innerHTML = '<div class="empty">暂无用户。</div>';
+        return;
+      }
+      els.userTable.innerHTML = `
+        <table class="user-table">
+          <colgroup>
+            <col style="width: 18%;" />
+            <col style="width: 22%;" />
+            <col style="width: 10%;" />
+            <col style="width: 16%;" />
+            <col class="actions-col" />
+          </colgroup>
+          <thead><tr><th>用户名</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+          <tbody>
+            ${pageRows.map((u) => `
+              <tr>
+                <td>${escapeHtml(u.username)}</td>
+                <td>
+                  <select class="select" style="min-width:120px;" data-user-role="${escapeHtml(u.username)}">
+                    <option value="viewer" ${u.role === "viewer" ? "selected" : ""}>viewer</option>
+                    <option value="admin" ${u.role === "admin" ? "selected" : ""}>admin</option>
+                  </select>
+                </td>
+                <td>${u.is_active ? '<span class="badge">启用</span>' : '<span class="badge">禁用</span>'}</td>
+                <td>${escapeHtml(new Date(u.created_at).toLocaleString())}</td>
+                <td class="actions-cell">
+                  <div class="actions-toolbar">
+                    <button class="button secondary table-button" data-save-user="${escapeHtml(u.username)}" type="button">保存角色</button>
+                    <button class="button secondary table-button" data-view-user-assignments="${escapeHtml(u.username)}" type="button">查看分配</button>
+                    <button class="button ${u.is_active ? "danger" : "secondary"} table-button" data-toggle-user="${escapeHtml(u.username)}" data-active="${u.is_active ? "false" : "true"}" type="button">${u.is_active ? "禁用" : "启用"}</button>
+                    <button class="button danger table-button" data-delete-user="${escapeHtml(u.username)}" type="button">删除</button>
+                  </div>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>`;
+    }
+    function renderAssignments() {
+      const q = els.assignmentSearch.value.trim().toLowerCase();
+      const userFilter = els.assignmentUserFilter.value;
+      const eaFilter = els.assignmentEaFilter.value;
+      const list = assignments.filter((a) => {
+        if (userFilter !== "all" && a.username !== userFilter) return false;
+        if (eaFilter !== "all" && a.ea_id !== eaFilter) return false;
+        return !q || [a.ea_id, a.username].some((v) => matches(v, q));
+      });
+      if (!list.length) {
+        els.assignmentTable.innerHTML = '<div class="empty">暂无 EA 分配。</div>';
+        return;
+      }
+      els.assignmentTable.innerHTML = `
+        <table>
+          <thead><tr><th>EA ID</th><th>用户</th><th>权限</th><th>分配人</th><th>时间</th><th>操作</th></tr></thead>
+          <tbody>
+            ${list.map((a) => `
+              <tr>
+                <td><a href="/ea-accounts?ea=${encodeURIComponent(a.ea_id)}" title="查看 ${escapeHtml(a.ea_id)}"><code>${escapeHtml(a.ea_id)}</code></a></td>
+                <td>${escapeHtml(a.username)}</td>
+                <td>${permissionCell(a)}</td>
+                <td>${escapeHtml(a.assigned_by || "-")}</td>
+                <td>${escapeHtml(new Date(a.created_at).toLocaleString())}</td>
+                <td class="toolbar">
+                  ${editingAssignmentIds.has(String(a.id))
+                    ? `<button class="button secondary" style="width:auto;padding:6px 10px;" data-save-assignment="${escapeHtml(a.id)}" type="button">保存</button>
+                       <button class="button secondary" style="width:auto;padding:6px 10px;" data-cancel-assignment-edit="${escapeHtml(a.id)}" type="button">取消</button>`
+                    : `<button class="button secondary" style="width:auto;padding:6px 10px;" data-edit-assignment="${escapeHtml(a.id)}" type="button">编辑权限</button>`}
+                  <button class="button danger" style="width:auto;padding:6px 10px;" data-revoke="${escapeHtml(a.id)}" type="button">撤销</button>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>`;
+    }
+    async function loadAll() {
+      clearMsg();
+      [users, assignments] = await Promise.all([
+        api("/api/admin/users"),
+        api("/api/admin/assignments"),
+      ]);
+      renderAssignmentFilters();
+      renderUsers();
+      applyInitialUserFilter();
+      renderAssignments();
+    }
+    async function createUser() {
+      const payload = {
+        username: els.newUsername.value.trim(),
+        password: els.newPassword.value,
+        role: "viewer",
+      };
+      if (!payload.username || !payload.password) throw new Error("请填写用户名和密码。");
+      await api("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      els.newPassword.value = "";
+      show("用户已创建/更新。");
+      await loadAll();
+    }
+    function csvCell(value) {
+      const text = String(value ?? "");
+      return `"${text.replaceAll('"', '""')}"`;
+    }
+    function exportUsersCsv() {
+      const rows = visibleUsers();
+      if (!rows.length) {
+        show("当前筛选结果为空，无需导出。", "err");
+        return;
+      }
+      const header = ["用户名", "角色", "状态", "创建时间", "EA 分配权限"];
+      const lines = [
+        header.map(csvCell).join(","),
+        ...rows.map((u) => [
+          u.username,
+          u.role,
+          u.is_active ? "启用" : "禁用",
+          u.created_at,
+          assignmentSummaryForUser(u.username),
+        ].map(csvCell).join(",")),
+      ];
+      const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      link.href = url;
+      link.download = `users-${stamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      show(`已导出 ${rows.length} 个用户及其 EA 分配权限。`);
+    }
+    async function updateAssignment(id) {
+      const payload = {
+        can_view: Boolean(document.querySelector(`[data-assignment-view="${CSS.escape(String(id))}"]`)?.checked),
+        can_trade: Boolean(document.querySelector(`[data-assignment-trade="${CSS.escape(String(id))}"]`)?.checked),
+        is_primary_operator: Boolean(document.querySelector(`[data-assignment-primary="${CSS.escape(String(id))}"]`)?.checked),
+      };
+      await api(`/api/admin/assignments/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      editingAssignmentIds.delete(String(id));
+      show("分配权限已更新。");
+      await loadAll();
+    }
+    async function revokeAssignment(id) {
+      if (!window.confirm("确认撤销这条 EA 分配？")) return;
+      await api(`/api/admin/assignments/${encodeURIComponent(id)}`, { method: "DELETE" });
+      show("分配已撤销。");
+      await loadAll();
+    }
+    async function updateUser(username, patch) {
+      await api(`/api/admin/users/${encodeURIComponent(username)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      show("用户已更新。");
+      await loadAll();
+    }
+    async function deleteUser(username) {
+      if (!window.confirm(`确认删除用户 ${username}？只有没有 EA 分配历史的用户才能删除。`)) return;
+      await api(`/api/admin/users/${encodeURIComponent(username)}`, { method: "DELETE" });
+      show(`用户 ${username} 已删除。`);
+      await loadAll();
+    }
+    function viewAssignmentsForUser(username) {
+      els.assignmentSearch.value = "";
+      els.assignmentUserFilter.value = username;
+      els.assignmentEaFilter.value = "all";
+      editingAssignmentIds.clear();
+      renderAssignments();
+      const count = assignments.filter((a) => a.username === username).length;
+      show(count ? `已筛选 ${username} 的 ${count} 条 EA 分配。` : `${username} 暂无 EA 分配。`);
+      els.assignmentSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    function bind(id, handler) {
+      document.getElementById(id).addEventListener("click", async () => {
+        try {
+          await handler();
+        } catch (error) {
+          show(error.message || String(error), "err");
+        }
+      });
+    }
+
+    bind("loginBtn", loginOrSave);
+    bind("createUserBtn", createUser);
+    bind("clearAssignmentFiltersBtn", clearAssignmentFilters);
+    bind("exportUsersCsvBtn", exportUsersCsv);
+    function resetUserPageAndRender() {
+      currentUserPage = 1;
+      renderUsers();
+    }
+    els.userSearch.addEventListener("input", resetUserPageAndRender);
+    els.userPageSizeSelect.addEventListener("change", resetUserPageAndRender);
+    els.prevUserPageBtn.addEventListener("click", () => {
+      currentUserPage -= 1;
+      renderUsers();
+    });
+    els.nextUserPageBtn.addEventListener("click", () => {
+      currentUserPage += 1;
+      renderUsers();
+    });
+    els.assignmentSearch.addEventListener("input", renderAssignments);
+    els.assignmentUserFilter.addEventListener("change", renderAssignments);
+    els.assignmentEaFilter.addEventListener("change", renderAssignments);
+    els.assignmentTable.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const editButton = target.closest("[data-edit-assignment]");
+      if (editButton) {
+        editingAssignmentIds.add(String(editButton.dataset.editAssignment));
+        renderAssignments();
+        return;
+      }
+      const cancelEditButton = target.closest("[data-cancel-assignment-edit]");
+      if (cancelEditButton) {
+        editingAssignmentIds.delete(String(cancelEditButton.dataset.cancelAssignmentEdit));
+        renderAssignments();
+        return;
+      }
+      const saveButton = target.closest("[data-save-assignment]");
+      if (saveButton) {
+        try {
+          await updateAssignment(saveButton.dataset.saveAssignment);
+        } catch (error) {
+          show(error.message || String(error), "err");
+        }
+        return;
+      }
+      const button = target.closest("[data-revoke]");
+      if (!button) return;
+      try {
+        await revokeAssignment(button.dataset.revoke);
+      } catch (error) {
+        show(error.message || String(error), "err");
+      }
+    });
+    els.userTable.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const saveButton = target.closest("[data-save-user]");
+      if (saveButton) {
+        const username = saveButton.dataset.saveUser;
+        const role = document.querySelector(`[data-user-role="${CSS.escape(String(username))}"]`)?.value || "viewer";
+        try {
+          await updateUser(username, { role });
+        } catch (error) {
+          show(error.message || String(error), "err");
+        }
+        return;
+      }
+      const viewAssignmentsButton = target.closest("[data-view-user-assignments]");
+      if (viewAssignmentsButton) {
+        viewAssignmentsForUser(viewAssignmentsButton.dataset.viewUserAssignments);
+        return;
+      }
+      const toggleButton = target.closest("[data-toggle-user]");
+      if (toggleButton) {
+        try {
+          await updateUser(toggleButton.dataset.toggleUser, { is_active: toggleButton.dataset.active === "true" });
+        } catch (error) {
+          show(error.message || String(error), "err");
+        }
+        return;
+      }
+      const deleteButton = target.closest("[data-delete-user]");
+      if (!deleteButton) return;
+      try {
+        await deleteUser(deleteButton.dataset.deleteUser);
+      } catch (error) {
+        show(error.message || String(error), "err");
+      }
+    });
+
+    els.adminToken.value = localStorage.getItem("ea-admin-token") || "";
+    loadAll().catch((error) => show(error.message || String(error), "err"));
+  </script>
+</body>
+</html>

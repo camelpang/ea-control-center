@@ -1,15 +1,16 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
-from app.models import AccountSnapshot, Command, CommandLog, CommandStatus, CommandType, EAInstance, Position, utc_now
+from app.models import AccountSnapshot, AuditLog, Command, CommandLog, CommandStatus, CommandType, EAInstance, Position, utc_now
 from app.schemas import CommandOut, CommandResultIn, HeartbeatIn, MessageOut, SnapshotAck, SnapshotIn
-from app.security import require_ea_token
+from app.security import verify_password
 
-router = APIRouter(dependencies=[Depends(require_ea_token)])
+router = APIRouter()
 
 
 def mark_timed_out_commands(db: Session) -> None:
@@ -29,6 +30,34 @@ def mark_timed_out_commands(db: Session) -> None:
         command.status = CommandStatus.timeout
         command.completed_at = now
         command.logs.append(CommandLog(status=CommandStatus.timeout, message="Command expired before completion"))
+        db.add(
+            AuditLog(
+                actor="system",
+                actor_role="system",
+                action="command.timeout",
+                resource_type="command",
+                resource_id=str(command.id),
+                details={
+                    "ea_id": command.ea_id,
+                    "command_id": command.id,
+                    "command_type": command.command_type.value,
+                    "expires_at": command.expires_at.isoformat() if command.expires_at else None,
+                },
+            )
+        )
+
+
+def write_ea_audit_log(db: Session, *, ea_id: str, action: str, resource_id: str, details: dict) -> None:
+    db.add(
+        AuditLog(
+            actor=f"ea:{ea_id}",
+            actor_role="ea",
+            action=action,
+            resource_type="command",
+            resource_id=resource_id,
+            details=details,
+        )
+    )
 
 
 def get_or_create_ea(db: Session, ea_id: str) -> EAInstance:
@@ -41,8 +70,25 @@ def get_or_create_ea(db: Session, ea_id: str) -> EAInstance:
     return ea
 
 
+def verify_ea_access(db: Session, ea_id: str, x_ea_token: str | None) -> None:
+    if x_ea_token == settings.ea_api_token:
+        return
+
+    ea = db.scalar(select(EAInstance).where(EAInstance.ea_id == ea_id))
+    if ea and ea.api_token_enabled and ea.api_token_hash and x_ea_token:
+        if verify_password(x_ea_token, ea.api_token_hash):
+            return
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid EA token")
+
+
 @router.post("/heartbeat", response_model=MessageOut)
-def heartbeat(payload: HeartbeatIn, db: Session = Depends(get_db)) -> MessageOut:
+def heartbeat(
+    payload: HeartbeatIn,
+    db: Session = Depends(get_db),
+    x_ea_token: str | None = Header(default=None, alias="X-EA-Token"),
+) -> MessageOut:
+    verify_ea_access(db, payload.ea_id, x_ea_token)
     ea = get_or_create_ea(db, payload.ea_id)
     ea.account_number = payload.account_number or ea.account_number
     ea.broker = payload.broker or ea.broker
@@ -58,7 +104,12 @@ def heartbeat(payload: HeartbeatIn, db: Session = Depends(get_db)) -> MessageOut
 
 
 @router.post("/snapshot", response_model=SnapshotAck)
-def snapshot(payload: SnapshotIn, db: Session = Depends(get_db)) -> SnapshotAck:
+def snapshot(
+    payload: SnapshotIn,
+    db: Session = Depends(get_db),
+    x_ea_token: str | None = Header(default=None, alias="X-EA-Token"),
+) -> SnapshotAck:
+    verify_ea_access(db, payload.ea_id, x_ea_token)
     ea = get_or_create_ea(db, payload.ea_id)
     ea.account_number = payload.account_number or ea.account_number
     ea.last_seen_at = utc_now()
@@ -107,7 +158,12 @@ def snapshot(payload: SnapshotIn, db: Session = Depends(get_db)) -> SnapshotAck:
 
 
 @router.get("/commands", response_model=list[CommandOut])
-def list_commands(ea_id: str, db: Session = Depends(get_db)) -> list[Command]:
+def list_commands(
+    ea_id: str,
+    db: Session = Depends(get_db),
+    x_ea_token: str | None = Header(default=None, alias="X-EA-Token"),
+) -> list[Command]:
+    verify_ea_access(db, ea_id, x_ea_token)
     mark_timed_out_commands(db)
 
     now = datetime.now(timezone.utc)
@@ -136,10 +192,16 @@ def list_commands(ea_id: str, db: Session = Depends(get_db)) -> list[Command]:
 
 
 @router.post("/commands/{command_id}/result", response_model=CommandOut)
-def command_result(command_id: int, payload: CommandResultIn, db: Session = Depends(get_db)) -> Command:
+def command_result(
+    command_id: int,
+    payload: CommandResultIn,
+    db: Session = Depends(get_db),
+    x_ea_token: str | None = Header(default=None, alias="X-EA-Token"),
+) -> Command:
     command = db.get(Command, command_id)
     if command is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Command not found")
+    verify_ea_access(db, command.ea_id, x_ea_token)
 
     command.status = payload.status
     if payload.status in {CommandStatus.success, CommandStatus.failed, CommandStatus.timeout, CommandStatus.cancelled}:
@@ -155,6 +217,19 @@ def command_result(command_id: int, payload: CommandResultIn, db: Session = Depe
             ea.allow_trading = True
 
     command.logs.append(CommandLog(status=payload.status, message=payload.message, raw=payload.raw))
+    write_ea_audit_log(
+        db,
+        ea_id=command.ea_id,
+        action="command.result",
+        resource_id=str(command.id),
+        details={
+            "ea_id": command.ea_id,
+            "command_id": command.id,
+            "command_type": command.command_type.value,
+            "status": payload.status.value,
+            "message": payload.message,
+        },
+    )
     db.commit()
     db.refresh(command)
     return command
