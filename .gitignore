@@ -19,3 +19,4 @@ htmlcov/
 *.ex4
 *.ex5
 docs/chat-record-*.md
+backups/
