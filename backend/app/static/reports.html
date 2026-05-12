@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>报表和复盘 · EA Control Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111f;
+      --panel: #101a2d;
+      --panel-alt: #17223a;
+      --border: #263653;
+      --text: #e5ecff;
+      --muted: #94a3c7;
+      --accent: #60a5fa;
+      --bad: #ef4444;
+      --warn: #f59e0b;
+      --ok: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1000px 520px at 50% -10%, #13264f 0%, var(--bg) 62%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 14px 22px;
+      background: rgba(8, 17, 31, 0.94);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    h1 { margin: 0; font-size: 1.22rem; }
+    h2 { margin: 0; font-size: 1rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    main { padding: 18px 22px 36px; display: grid; gap: 16px; }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(16, 26, 45, 0.88);
+      padding: 14px;
+      overflow: hidden;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .summary-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel-alt);
+      padding: 12px;
+    }
+    .summary-card .label { color: var(--muted); font-size: 13px; }
+    .summary-card .value { font-size: 24px; font-weight: 800; margin-top: 6px; }
+    .meta { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .input, .select, .button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-alt);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    .button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #2563eb, #1d4ed8);
+      font-weight: 700;
+    }
+    .button.secondary { background: #334155; }
+    .message {
+      display: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    .message.show { display: block; }
+    .message.ok { background: rgba(34, 197, 94, 0.14); color: #86efac; }
+    .message.err { background: rgba(239, 68, 68, 0.14); color: #fecaca; }
+    .report-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 9px 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.16); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 700; }
+    .empty { padding: 22px; color: var(--muted); text-align: center; }
+    code { color: #bfdbfe; }
+    @media (max-width: 1100px) {
+      .summary-grid, .report-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>报表和复盘</h1>
+      <div class="meta">按时间窗口汇总命令、人工干预、失败超时、操作员分布和 EA 风险排行。</div>
+    </div>
+    <nav class="toolbar">
+      <a href="/admin">管理控制台</a>
+      <a href="/operator">操作员工作台</a>
+      <a href="/alerts">生产告警中心</a>
+      <a href="/commands">命令历史</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>报表设置</h2>
+      <div class="toolbar" style="margin-top: 10px;">
+        <input id="adminToken" class="input" type="password" placeholder="X-Admin-Token 或使用已登录 JWT" style="min-width: 280px;" />
+        <select id="daysSelect" class="select">
+          <option value="1">最近 1 天</option>
+          <option value="7" selected>最近 7 天</option>
+          <option value="30">最近 30 天</option>
+          <option value="90">最近 90 天</option>
+        </select>
+        <button id="saveTokenBtn" class="button" type="button">保存 Token</button>
+        <button id="refreshBtn" class="button secondary" type="button">刷新报表</button>
+      </div>
+      <div id="msg" class="message" style="margin-top: 10px;"></div>
+    </section>
+
+    <section class="summary-grid">
+      <div class="summary-card"><div class="label">命令总数</div><div id="commandsTotal" class="value">-</div></div>
+      <div class="summary-card"><div class="label">成功</div><div id="commandsSuccess" class="value">-</div></div>
+      <div class="summary-card"><div class="label">失败</div><div id="commandsFailed" class="value">-</div></div>
+      <div class="summary-card"><div class="label">超时</div><div id="commandsTimeout" class="value">-</div></div>
+      <div class="summary-card"><div class="label">未完成</div><div id="commandsActive" class="value">-</div></div>
+      <div class="summary-card"><div class="label">人工干预</div><div id="manualCommands" class="value">-</div></div>
+    </section>
+
+    <section class="panel">
+      <div id="windowText" class="meta">尚未加载</div>
+    </section>
+
+    <section class="report-grid">
+      <div class="panel">
+        <h2>命令状态分布</h2>
+        <table><tbody id="statusTable"></tbody></table>
+      </div>
+      <div class="panel">
+        <h2>命令类型分布</h2>
+        <table><tbody id="typeTable"></tbody></table>
+      </div>
+      <div class="panel">
+        <h2>操作员分布</h2>
+        <table><tbody id="operatorTable"></tbody></table>
+      </div>
+      <div class="panel">
+        <h2>EA 风险排行</h2>
+        <table><tbody id="eaTable"></tbody></table>
+      </div>
+      <div class="panel">
+        <h2>归档 / 恢复记录</h2>
+        <div class="meta" id="archiveSummary">-</div>
+        <table><tbody id="archiveTable"></tbody></table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const els = {
+      adminToken: document.getElementById("adminToken"),
+      daysSelect: document.getElementById("daysSelect"),
+      saveTokenBtn: document.getElementById("saveTokenBtn"),
+      refreshBtn: document.getElementById("refreshBtn"),
+      msg: document.getElementById("msg"),
+      commandsTotal: document.getElementById("commandsTotal"),
+      commandsSuccess: document.getElementById("commandsSuccess"),
+      commandsFailed: document.getElementById("commandsFailed"),
+      commandsTimeout: document.getElementById("commandsTimeout"),
+      commandsActive: document.getElementById("commandsActive"),
+      manualCommands: document.getElementById("manualCommands"),
+      windowText: document.getElementById("windowText"),
+      statusTable: document.getElementById("statusTable"),
+      typeTable: document.getElementById("typeTable"),
+      operatorTable: document.getElementById("operatorTable"),
+      eaTable: document.getElementById("eaTable"),
+      archiveSummary: document.getElementById("archiveSummary"),
+      archiveTable: document.getElementById("archiveTable"),
+    };
+    let report = null;
+
+    function show(text, type = "ok") {
+      els.msg.textContent = text;
+      els.msg.className = "message show " + type;
+    }
+    function clearMsg() {
+      els.msg.className = "message";
+      els.msg.textContent = "";
+    }
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+    function getJwt() {
+      return (localStorage.getItem("ea-jwt") || "").trim();
+    }
+    function getToken() {
+      return (localStorage.getItem("ea-admin-token") || "").trim() || els.adminToken.value.trim();
+    }
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      const jwt = getJwt();
+      const legacy = getToken();
+      if (jwt) headers.Authorization = `Bearer ${jwt}`;
+      else if (legacy) headers["X-Admin-Token"] = legacy;
+      const res = await fetch(path, { ...options, headers });
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+      return text ? JSON.parse(text) : null;
+    }
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+    }
+    function renderBuckets(table, rows) {
+      table.innerHTML = rows.length
+        ? rows.map((row) => `<tr><td>${escapeHtml(row.key)}</td><td>${escapeHtml(row.count)}</td></tr>`).join("")
+        : '<tr><td class="empty">暂无数据</td></tr>';
+    }
+    function renderReport() {
+      els.commandsTotal.textContent = report.commands_total;
+      els.commandsSuccess.textContent = report.commands_success;
+      els.commandsFailed.textContent = report.commands_failed;
+      els.commandsTimeout.textContent = report.commands_timeout;
+      els.commandsActive.textContent = report.commands_active;
+      els.manualCommands.textContent = report.manual_commands;
+      els.windowText.textContent = `窗口：${formatDate(report.window_start)} 至 ${formatDate(report.window_end)} · ${report.days} 天 · 生成：${formatDate(report.generated_at)}`;
+      renderBuckets(els.statusTable, report.by_status || []);
+      renderBuckets(els.typeTable, report.by_type || []);
+      renderBuckets(els.operatorTable, report.by_operator || []);
+      els.eaTable.innerHTML = (report.top_eas || []).length
+        ? report.top_eas.map((row) => `
+          <tr>
+            <td><a href="/ea-detail?ea=${encodeURIComponent(row.ea_id)}"><code>${escapeHtml(row.ea_id)}</code></a><div class="meta">${escapeHtml(row.account_number || "-")} / ${escapeHtml(row.broker || "-")}</div></td>
+            <td>命令 ${escapeHtml(row.commands_count)} · 失败 ${escapeHtml(row.failed_count)} · 超时 ${escapeHtml(row.timeout_count)} · 人工 ${escapeHtml(row.manual_count)}</td>
+            <td>${escapeHtml(formatDate(row.latest_command_at))}</td>
+          </tr>
+        `).join("")
+        : '<tr><td class="empty">暂无 EA 命令数据</td></tr>';
+      els.archiveSummary.textContent = `归档 ${report.archived_events} 次 · 恢复 ${report.restored_events} 次`;
+      els.archiveTable.innerHTML = (report.archive_events || []).length
+        ? report.archive_events.map((row) => `
+          <tr>
+            <td>${escapeHtml(formatDate(row.created_at))}</td>
+            <td>${escapeHtml(row.action)}</td>
+            <td><code>${escapeHtml(row.resource_id || "-")}</code></td>
+            <td>${escapeHtml(row.actor)}</td>
+          </tr>
+        `).join("")
+        : '<tr><td class="empty">暂无归档/恢复记录</td></tr>';
+    }
+    async function loadReport() {
+      clearMsg();
+      report = await api(`/api/admin/reports/operations?days=${encodeURIComponent(els.daysSelect.value)}`);
+      renderReport();
+      show("报表已刷新。");
+    }
+
+    els.adminToken.value = localStorage.getItem("ea-admin-token") || "";
+    els.saveTokenBtn.addEventListener("click", () => {
+      localStorage.setItem("ea-admin-token", els.adminToken.value.trim());
+      show("Token 已保存。");
+      loadReport().catch((error) => show(error.message || String(error), "err"));
+    });
+    els.refreshBtn.addEventListener("click", () => loadReport().catch((error) => show(error.message || String(error), "err")));
+    els.daysSelect.addEventListener("change", () => loadReport().catch((error) => show(error.message || String(error), "err")));
+    loadReport().catch((error) => show(error.message || String(error), "err"));
+  </script>
+</body>
+</html>

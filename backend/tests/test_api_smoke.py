@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -102,8 +104,136 @@ def test_dashboard_eas_ok(client: TestClient) -> None:
         assert "snapshot_profit" in row
     ref_row = next(row for row in body if row["ea_id"] == "pytest-market-ref-ea")
     assert ref_row["market_symbol"] == "XAUUSD.c"
-    assert ref_row["market_bid"] == "4704.090000"
-    assert ref_row["market_ask"] == "4704.290000"
+    assert Decimal(ref_row["market_bid"]) == Decimal("4704.09")
+    assert Decimal(ref_row["market_ask"]) == Decimal("4704.29")
+
+
+def test_ea_archive_restore_and_trade_guard(client: TestClient) -> None:
+    ea_id = "pytest-archive-ea"
+    headers = {"X-Admin-Token": "test_admin_token"}
+    client.post(
+        "/api/ea/heartbeat",
+        headers={"X-EA-Token": "test_ea_token"},
+        json={"ea_id": ea_id, "terminal": "MT5", "status": "online", "allow_trading": True},
+    )
+
+    archived = client.post(f"/api/admin/eas/{ea_id}/archive", headers=headers, json={"reason": "pytest retired"})
+    assert archived.status_code == 200
+    archived_body = archived.json()
+    assert archived_body["lifecycle_status"] == "archived"
+    assert archived_body["allow_trading"] is False
+    assert archived_body["archive_reason"] == "pytest retired"
+
+    dashboard = client.get("/api/admin/dashboard/eas", headers=headers)
+    assert dashboard.status_code == 200
+    assert ea_id not in {row["ea_id"] for row in dashboard.json()}
+
+    command = client.post(
+        "/api/admin/commands",
+        headers=headers,
+        json={"ea_id": ea_id, "command_type": "open_order", "payload": {"symbol": "XAUUSD", "side": "buy", "volume": 0.01}},
+    )
+    assert command.status_code == 409
+
+    restored = client.post(f"/api/admin/eas/{ea_id}/restore", headers=headers, json={"reason": "pytest restore"})
+    assert restored.status_code == 200
+    assert restored.json()["lifecycle_status"] == "active"
+
+
+def test_admin_alerts_reports_offline_and_command_risks(client: TestClient) -> None:
+    ea_id = "pytest-alert-ea"
+    headers = {"X-Admin-Token": "test_admin_token"}
+    client.post(
+        "/api/ea/heartbeat",
+        headers={"X-EA-Token": "test_ea_token"},
+        json={"ea_id": ea_id, "terminal": "MT5", "status": "online", "allow_trading": True},
+    )
+    command = client.post(
+        "/api/admin/commands",
+        headers=headers,
+        json={"ea_id": ea_id, "command_type": "pause_trading", "payload": {"reason": "pytest alert"}},
+    )
+    assert command.status_code == 201
+
+    r = client.get("/api/admin/alerts", headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert {"generated_at", "total", "critical", "warning", "info", "alerts"} <= set(body)
+    assert body["total"] >= 1
+    categories = {alert["category"] for alert in body["alerts"]}
+    assert "command_active" in categories
+    assert any(alert["ea_id"] == ea_id and alert["action_url"] for alert in body["alerts"])
+
+
+def test_admin_operator_workbench_summary(client: TestClient) -> None:
+    ea_id = "pytest-operator-ea"
+    headers = {"X-Admin-Token": "test_admin_token"}
+    client.post(
+        "/api/ea/snapshot",
+        headers={"X-EA-Token": "test_ea_token"},
+        json={
+            "ea_id": ea_id,
+            "positions": [{"ticket": "op-1", "symbol": "XAUUSD", "side": "buy"}],
+            "pending_orders": [{"ticket": "op-p1", "symbol": "XAUUSD", "order_type": "buy_limit"}],
+        },
+    )
+    command = client.post(
+        "/api/admin/commands",
+        headers=headers,
+        json={"ea_id": ea_id, "command_type": "pause_trading", "payload": {"reason": "pytest operator"}},
+    )
+    assert command.status_code == 201
+
+    r = client.get("/api/admin/operator-workbench", headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["username"] == "legacy-token"
+    assert body["total_eas"] >= 1
+    assert body["open_positions"] >= 1
+    assert body["pending_orders"] >= 1
+    row = next(item for item in body["eas"] if item["ea_id"] == ea_id)
+    assert row["can_trade"] is True
+    assert row["positions_count"] == 1
+    assert row["pending_orders_count"] == 1
+    assert row["active_commands_count"] >= 1
+
+
+def test_admin_operations_report_summary(client: TestClient) -> None:
+    ea_id = "pytest-report-ea"
+    headers = {"X-Admin-Token": "test_admin_token"}
+    command = client.post(
+        "/api/admin/commands",
+        headers=headers,
+        json={
+            "ea_id": ea_id,
+            "command_type": "manual_manage",
+            "payload": {"manual_manage": True, "source": "manual-trades-ui"},
+            "requested_by": "pytest-reporter",
+        },
+    )
+    if command.status_code == 404:
+        client.post("/api/ea/heartbeat", headers={"X-EA-Token": "test_ea_token"}, json={"ea_id": ea_id})
+        command = client.post(
+            "/api/admin/commands",
+            headers=headers,
+            json={
+                "ea_id": ea_id,
+                "command_type": "manual_manage",
+                "payload": {"manual_manage": True, "source": "manual-trades-ui"},
+                "requested_by": "pytest-reporter",
+            },
+        )
+    assert command.status_code == 201
+
+    r = client.get("/api/admin/reports/operations?days=7", headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["days"] == 7
+    assert body["commands_total"] >= 1
+    assert body["manual_commands"] >= 1
+    assert {"by_status", "by_type", "by_operator", "top_eas", "archive_events"} <= set(body)
+    assert any(row["key"] == "manual_manage" for row in body["by_type"])
+    assert any(row["key"] == "pytest-reporter" for row in body["by_operator"])
 
 
 def test_admin_can_create_user_and_assignment(client: TestClient) -> None:
@@ -859,6 +989,49 @@ def test_dashboard_html_route(client: TestClient) -> None:
     assert 'id="bulkSymbol" class="input" type="text" value="XAUUSD"' in r.text
 
 
+def test_alerts_html_route(client: TestClient) -> None:
+    r = client.get("/alerts")
+    assert r.status_code == 200
+    assert "text/html" in r.headers.get("content-type", "")
+    assert "生产告警中心" in r.text
+    assert "/api/admin/alerts" in r.text
+    assert "severityFilter" in r.text
+    assert "categoryFilter" in r.text
+    assert "alertList" in r.text
+    assert "EA 离线" in r.text
+    assert "快照过期" in r.text
+    assert "命令失败/超时" in r.text
+    assert "命令未完成" in r.text
+    assert "交易许可关闭" in r.text
+
+
+def test_operator_html_route(client: TestClient) -> None:
+    r = client.get("/operator")
+    assert r.status_code == 200
+    assert "text/html" in r.headers.get("content-type", "")
+    assert "操作员工作台" in r.text
+    assert "/api/admin/operator-workbench" in r.text
+    assert "riskFilter" in r.text
+    assert "我的 EA" in r.text
+    assert "待关注告警" in r.text
+    assert "进入人工处理" in r.text
+    assert "/manual-trades?ea=" in r.text
+
+
+def test_reports_html_route(client: TestClient) -> None:
+    r = client.get("/reports")
+    assert r.status_code == 200
+    assert "text/html" in r.headers.get("content-type", "")
+    assert "报表和复盘" in r.text
+    assert "/api/admin/reports/operations" in r.text
+    assert "daysSelect" in r.text
+    assert "命令状态分布" in r.text
+    assert "命令类型分布" in r.text
+    assert "操作员分布" in r.text
+    assert "EA 风险排行" in r.text
+    assert "归档 / 恢复记录" in r.text
+
+
 def test_admin_html_route_is_global_overview(client: TestClient) -> None:
     r = client.get("/admin")
     assert r.status_code == 200
@@ -889,6 +1062,9 @@ def test_admin_html_route_is_global_overview(client: TestClient) -> None:
     assert 'href="/manual-trades?risk=paused"' in r.text
     assert 'href="/manual-trades?commands=active"' in r.text
     assert 'href="/commands"' in r.text
+    assert 'href="/alerts"' in r.text
+    assert 'href="/operator"' in r.text
+    assert 'href="/reports"' in r.text
     assert 'href="/audit-logs"' in r.text
     assert "hidden-legacy" in r.text
     assert "auditLogFeed" in r.text
@@ -1026,6 +1202,8 @@ def test_ea_detail_html_route(client: TestClient) -> None:
     assert "activeCommandCount" in r.text
     assert "openConfirmDialog" in r.text
     assert "待领取 / 已领取 / 执行中命令" in r.text
+    assert "lifecycle_status" in r.text
+    assert "EA 已归档或停用" in r.text
     assert "/api/admin/eas/" in r.text
     assert "/api/admin/commands?ea_id=" in r.text
     assert "/api/admin/commands" in r.text
@@ -1102,6 +1280,15 @@ def test_ea_accounts_html_route(client: TestClient) -> None:
     assert "EA 账号列表" in r.text
     assert "assignmentFilter" in r.text
     assert "statusFilter" in r.text
+    assert "lifecycleFilter" in r.text
+    assert "data-archive-ea" in r.text
+    assert "data-restore-ea" in r.text
+    assert "bulkArchiveBtn" in r.text
+    assert "bulkRestoreBtn" in r.text
+    assert "openBulkLifecycleModal" in r.text
+    assert "Promise.allSettled" in r.text
+    assert "lifecycleModal" in r.text
+    assert "confirmLifecycleAction" in r.text
     assert "tokenFilter" in r.text
     assert "pageSizeSelect" in r.text
     assert "pagedEas" in r.text
@@ -1190,3 +1377,27 @@ def test_dashboard_preview_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     with TestClient(create_app()) as c:
         r = c.get("/api/dashboard-preview?count=5")
         assert r.status_code == 404
+
+
+def test_backup_restore_drill_assets_exist() -> None:
+    root = Path(__file__).resolve().parents[2]
+    script = root / "scripts" / "restore-drill-postgres.sh"
+    doc = root / "docs" / "backup-restore-drill.md"
+    deploy_doc = root / "docs" / "github-server-deploy.md"
+    checklist = root / "docs" / "production-readiness-checklist.md"
+
+    script_text = script.read_text(encoding="utf-8")
+    assert "DRILL_DB" in script_text
+    assert "ea_control_restore_drill" in script_text
+    assert 'if [[ "$DRILL_DB" == "$POSTGRES_DB" ]]' in script_text
+    assert "dropdb" in script_text
+    assert "createdb" in script_text
+    assert "alembic_version" in script_text
+
+    doc_text = doc.read_text(encoding="utf-8")
+    assert "Backup Restore Drill" in doc_text
+    assert "must not touch the live database" in doc_text
+    assert "scripts/restore-drill-postgres.sh" in doc_text
+
+    assert "restore-drill-postgres.sh" in deploy_doc.read_text(encoding="utf-8")
+    assert "backup-restore-drill.md" in checklist.read_text(encoding="utf-8")

@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import CommandStatus, CommandType
+from app.models import CommandStatus, CommandType, EALifecycleStatus
 
 EA_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"
 EA_ID_HELP = "EA ID must be 3-128 chars and use only letters, numbers, dot, underscore, hyphen, or colon"
@@ -86,6 +86,10 @@ class EACreateIn(BaseModel):
     api_token: str | None = Field(default=None, min_length=8, max_length=256)
 
 
+class EALifecycleUpdateIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
+
+
 class CommandResultIn(BaseModel):
     status: CommandStatus
     message: str | None = None
@@ -102,7 +106,11 @@ class EAOut(BaseModel):
     strategy_name: str | None
     version: str | None
     status: str
+    lifecycle_status: EALifecycleStatus = EALifecycleStatus.active
     allow_trading: bool
+    archived_at: datetime | None = None
+    archived_by: str | None = None
+    archive_reason: str | None = None
     last_seen_at: datetime
     updated_at: datetime
     positions_count: int = 0
@@ -137,6 +145,115 @@ class EADashboardCardOut(EAOut):
     market_bid: Decimal | None = None
     market_ask: Decimal | None = None
     market_last: Decimal | None = None
+
+
+class ProductionAlertOut(BaseModel):
+    id: str
+    severity: Literal["critical", "warning", "info"]
+    category: str
+    title: str
+    message: str
+    ea_id: str | None = None
+    command_id: int | None = None
+    status: str | None = None
+    detected_at: datetime
+    last_seen_at: datetime | None = None
+    latest_snapshot_at: datetime | None = None
+    latest_command_at: datetime | None = None
+    age_seconds: int | None = None
+    action_url: str | None = None
+
+
+class ProductionAlertSummaryOut(BaseModel):
+    generated_at: datetime
+    total: int
+    critical: int
+    warning: int
+    info: int
+    alerts: list[ProductionAlertOut] = Field(default_factory=list)
+
+
+class OperatorWorkbenchEAOut(BaseModel):
+    ea_id: str
+    account_number: str | None = None
+    broker: str | None = None
+    status: str
+    allow_trading: bool
+    can_trade: bool
+    is_primary_operator: bool
+    positions_count: int = 0
+    pending_orders_count: int = 0
+    active_commands_count: int = 0
+    latest_command_status: CommandStatus | None = None
+    latest_command_type: CommandType | None = None
+    latest_command_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    latest_snapshot_at: datetime | None = None
+    risk_level: Literal["high", "watch", "paused", "normal"] = "normal"
+    risk_text: str = "normal"
+
+
+class OperatorWorkbenchOut(BaseModel):
+    generated_at: datetime
+    username: str
+    role: str
+    total_eas: int
+    tradeable_eas: int
+    offline_eas: int
+    active_commands: int
+    open_positions: int
+    pending_orders: int
+    alerts: list[ProductionAlertOut] = Field(default_factory=list)
+    eas: list[OperatorWorkbenchEAOut] = Field(default_factory=list)
+
+
+class ReportBucketOut(BaseModel):
+    key: str
+    count: int
+
+
+class ReportEAOut(BaseModel):
+    ea_id: str
+    account_number: str | None = None
+    broker: str | None = None
+    commands_count: int = 0
+    failed_count: int = 0
+    timeout_count: int = 0
+    manual_count: int = 0
+    latest_command_at: datetime | None = None
+
+
+class ReportAuditEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    actor: str
+    actor_role: str | None
+    action: str
+    resource_type: str
+    resource_id: str | None
+    details: dict[str, Any] | None = None
+    created_at: datetime
+
+
+class OperationsReportOut(BaseModel):
+    generated_at: datetime
+    window_start: datetime
+    window_end: datetime
+    days: int
+    commands_total: int
+    commands_success: int
+    commands_failed: int
+    commands_timeout: int
+    commands_active: int
+    manual_commands: int
+    archived_events: int
+    restored_events: int
+    by_status: list[ReportBucketOut] = Field(default_factory=list)
+    by_type: list[ReportBucketOut] = Field(default_factory=list)
+    by_operator: list[ReportBucketOut] = Field(default_factory=list)
+    top_eas: list[ReportEAOut] = Field(default_factory=list)
+    archive_events: list[ReportAuditEventOut] = Field(default_factory=list)
 
 
 class PositionOut(BaseModel):

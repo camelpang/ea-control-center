@@ -81,8 +81,11 @@ def create_app() -> FastAPI:
             "admin": "/admin",
             "dashboard": "/dashboard",
             "dashboard_demo_30": "/dashboard?demo=30",
+            "operator": "/operator",
+            "reports": "/reports",
             "manual_trades": "/manual-trades",
             "ea_detail": "/ea-detail?ea=EA_ID",
+            "alerts": "/alerts",
             "commands": "/commands",
             "audit_logs": "/audit-logs",
         }
@@ -118,6 +121,10 @@ def create_app() -> FastAPI:
     def manual_trades_ui() -> FileResponse:
         return FileResponse(static_dir / "manual_trades.html", media_type="text/html; charset=utf-8")
 
+    @app.get("/operator", include_in_schema=False)
+    def operator_ui() -> FileResponse:
+        return FileResponse(static_dir / "operator.html", media_type="text/html; charset=utf-8")
+
     @app.get("/ea-accounts", include_in_schema=False)
     def ea_accounts_ui() -> FileResponse:
         return FileResponse(static_dir / "ea_accounts.html", media_type="text/html; charset=utf-8")
@@ -133,6 +140,14 @@ def create_app() -> FastAPI:
     @app.get("/commands", include_in_schema=False)
     def commands_ui() -> FileResponse:
         return FileResponse(static_dir / "commands.html", media_type="text/html; charset=utf-8")
+
+    @app.get("/alerts", include_in_schema=False)
+    def alerts_ui() -> FileResponse:
+        return FileResponse(static_dir / "alerts.html", media_type="text/html; charset=utf-8")
+
+    @app.get("/reports", include_in_schema=False)
+    def reports_ui() -> FileResponse:
+        return FileResponse(static_dir / "reports.html", media_type="text/html; charset=utf-8")
 
     @app.get("/audit-logs", include_in_schema=False)
     def audit_logs_ui() -> FileResponse:

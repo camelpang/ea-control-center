@@ -892,6 +892,13 @@
     }
 
     function renderPermissionNote() {
+      if (["archived", "disabled"].includes(state.ea?.lifecycle_status)) {
+        const label = state.ea.lifecycle_status === "archived" ? "已归档" : "已停用";
+        const reason = state.ea.archive_reason ? `原因：${state.ea.archive_reason}` : "可到 EA 账号列表恢复后再操作。";
+        elements.permissionNote.textContent = `生命周期：${label}，禁止下发新的交易命令。${reason}`;
+        setOperationControlsEnabled(false);
+        return;
+      }
       if (!principal) {
         elements.permissionNote.textContent = "权限：当前使用静态 Token 或未读取到 JWT 用户；最终能否交易由后端权限校验。";
         setOperationControlsEnabled(true);
@@ -921,7 +928,7 @@
     function setOperationControlsEnabled(enabled) {
       operationButtons().forEach((button) => {
         button.disabled = !enabled;
-        button.title = enabled ? "" : "当前用户没有该 EA 的交易权限";
+        button.title = enabled ? "" : (["archived", "disabled"].includes(state.ea?.lifecycle_status) ? "EA 已归档或停用" : "当前用户没有该 EA 的交易权限");
       });
     }
 
@@ -1373,6 +1380,7 @@
         renderSnapshots();
         renderCommands();
         renderTradeSafetyNote();
+        renderPermissionNote();
         showMessage("EA 详情已刷新。", "ok");
       } catch (error) {
         showMessage(error.message, "error");

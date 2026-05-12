@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>生产告警中心 · EA Control Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111f;
+      --panel: #101a2d;
+      --panel-alt: #17223a;
+      --border: #263653;
+      --text: #e5ecff;
+      --muted: #94a3c7;
+      --accent: #60a5fa;
+      --critical: #ef4444;
+      --warning: #f59e0b;
+      --info: #60a5fa;
+      --ok: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1000px 520px at 50% -10%, #13264f 0%, var(--bg) 62%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 14px 22px;
+      background: rgba(8, 17, 31, 0.94);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    h1 { margin: 0; font-size: 1.22rem; }
+    h2 { margin: 0; font-size: 1rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    main { padding: 18px 22px 36px; display: grid; gap: 16px; }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(16, 26, 45, 0.88);
+      padding: 14px;
+      overflow: hidden;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .summary-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel-alt);
+      padding: 12px;
+    }
+    .summary-card .label { color: var(--muted); font-size: 13px; }
+    .summary-card .value { font-size: 28px; font-weight: 800; margin-top: 6px; }
+    .critical { color: #fecaca; }
+    .warning { color: #fde68a; }
+    .info { color: #bfdbfe; }
+    .ok { color: #86efac; }
+    .meta { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .input, .select, .button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-alt);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    .button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #2563eb, #1d4ed8);
+      font-weight: 700;
+    }
+    .button.secondary { background: #334155; }
+    .message {
+      display: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    .message.show { display: block; }
+    .message.ok { background: rgba(34, 197, 94, 0.14); color: #86efac; }
+    .message.err { background: rgba(239, 68, 68, 0.14); color: #fecaca; }
+    .alert-list { display: grid; gap: 10px; }
+    .alert-item {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-left: 4px solid var(--info);
+      border-radius: 14px;
+      background: rgba(8, 17, 31, 0.28);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .alert-item.critical { border-left-color: var(--critical); }
+    .alert-item.warning { border-left-color: var(--warning); }
+    .alert-item.info { border-left-color: var(--info); }
+    .alert-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .alert-title { font-weight: 800; }
+    .badge {
+      display: inline-flex;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(96, 165, 250, 0.16);
+      color: #bfdbfe;
+    }
+    .badge.critical { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
+    .badge.warning { background: rgba(245, 158, 11, 0.18); color: #fde68a; }
+    .badge.info { background: rgba(96, 165, 250, 0.16); color: #bfdbfe; }
+    .empty {
+      padding: 28px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+    }
+    @media (max-width: 900px) {
+      .summary-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>生产告警中心</h1>
+      <div class="meta">集中查看 EA 离线、快照过期、命令异常和交易许可风险。</div>
+    </div>
+    <nav class="toolbar">
+      <a href="/admin">管理控制台</a>
+      <a href="/dashboard">监控大屏</a>
+      <a href="/manual-trades">人工建仓管理</a>
+      <a href="/commands">命令历史</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>鉴权</h2>
+      <div class="toolbar" style="margin-top: 10px;">
+        <input id="adminToken" class="input" type="password" placeholder="X-Admin-Token，例如 admin123456" style="min-width: 280px;" />
+        <button id="saveTokenBtn" class="button" type="button">保存 Token</button>
+        <button id="refreshBtn" class="button secondary" type="button">刷新告警</button>
+        <select id="severityFilter" class="select">
+          <option value="all">全部级别</option>
+          <option value="critical">严重</option>
+          <option value="warning">警告</option>
+          <option value="info">提示</option>
+        </select>
+        <select id="categoryFilter" class="select">
+          <option value="all">全部类型</option>
+          <option value="ea_offline">EA 离线</option>
+          <option value="snapshot_stale">快照过期</option>
+          <option value="command_issue">命令失败/超时</option>
+          <option value="command_active">命令未完成</option>
+          <option value="trading_paused">交易许可关闭</option>
+        </select>
+      </div>
+      <div id="msg" class="message" style="margin-top: 10px;"></div>
+    </section>
+
+    <section class="summary-grid">
+      <div class="summary-card"><div class="label">告警总数</div><div id="totalCount" class="value">-</div></div>
+      <div class="summary-card"><div class="label">严重</div><div id="criticalCount" class="value critical">-</div></div>
+      <div class="summary-card"><div class="label">警告</div><div id="warningCount" class="value warning">-</div></div>
+      <div class="summary-card"><div class="label">提示</div><div id="infoCount" class="value info">-</div></div>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+        <h2>告警列表</h2>
+        <div id="generatedAt" class="meta">尚未加载</div>
+      </div>
+      <div id="alertList" class="alert-list"></div>
+    </section>
+  </main>
+
+  <script>
+    const els = {
+      adminToken: document.getElementById("adminToken"),
+      saveTokenBtn: document.getElementById("saveTokenBtn"),
+      refreshBtn: document.getElementById("refreshBtn"),
+      severityFilter: document.getElementById("severityFilter"),
+      categoryFilter: document.getElementById("categoryFilter"),
+      msg: document.getElementById("msg"),
+      totalCount: document.getElementById("totalCount"),
+      criticalCount: document.getElementById("criticalCount"),
+      warningCount: document.getElementById("warningCount"),
+      infoCount: document.getElementById("infoCount"),
+      generatedAt: document.getElementById("generatedAt"),
+      alertList: document.getElementById("alertList"),
+    };
+    let alertPayload = { alerts: [], total: 0, critical: 0, warning: 0, info: 0 };
+
+    function show(text, type = "ok") {
+      els.msg.textContent = text;
+      els.msg.className = "message show " + type;
+    }
+    function clearMsg() {
+      els.msg.className = "message";
+      els.msg.textContent = "";
+    }
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+    function getJwt() {
+      return (localStorage.getItem("ea-jwt") || "").trim();
+    }
+    function getToken() {
+      return (localStorage.getItem("ea-admin-token") || "").trim() || els.adminToken.value.trim();
+    }
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      const jwt = getJwt();
+      const legacy = getToken();
+      if (jwt) headers.Authorization = `Bearer ${jwt}`;
+      else if (legacy) headers["X-Admin-Token"] = legacy;
+      const res = await fetch(path, { ...options, headers });
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+      return text ? JSON.parse(text) : null;
+    }
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+    }
+    function ageText(seconds) {
+      if (seconds === null || seconds === undefined) return "未知";
+      if (seconds < 60) return `${seconds} 秒`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes} 分钟`;
+      const hours = Math.floor(minutes / 60);
+      return `${hours} 小时 ${minutes % 60} 分钟`;
+    }
+    function severityText(severity) {
+      return { critical: "严重", warning: "警告", info: "提示" }[severity] || severity || "-";
+    }
+    function categoryText(category) {
+      return {
+        ea_offline: "EA 离线",
+        snapshot_stale: "快照过期",
+        command_issue: "命令失败/超时",
+        command_active: "命令未完成",
+        trading_paused: "交易许可关闭",
+      }[category] || category || "-";
+    }
+    function filteredAlerts() {
+      const severity = els.severityFilter.value;
+      const category = els.categoryFilter.value;
+      return (alertPayload.alerts || []).filter((alert) => {
+        if (severity !== "all" && alert.severity !== severity) return false;
+        if (category !== "all" && alert.category !== category) return false;
+        return true;
+      });
+    }
+    function renderSummary() {
+      els.totalCount.textContent = String(alertPayload.total || 0);
+      els.criticalCount.textContent = String(alertPayload.critical || 0);
+      els.warningCount.textContent = String(alertPayload.warning || 0);
+      els.infoCount.textContent = String(alertPayload.info || 0);
+      els.generatedAt.textContent = alertPayload.generated_at ? `生成时间：${formatDate(alertPayload.generated_at)}` : "尚未加载";
+    }
+    function renderAlerts() {
+      const list = filteredAlerts();
+      if (!list.length) {
+        els.alertList.innerHTML = '<div class="empty">当前筛选下没有告警。</div>';
+        return;
+      }
+      els.alertList.innerHTML = list.map((alert) => `
+        <article class="alert-item ${escapeHtml(alert.severity)}">
+          <div class="alert-head">
+            <div>
+              <div class="alert-title">${escapeHtml(alert.title)}</div>
+              <div class="meta">${escapeHtml(alert.message)}</div>
+            </div>
+            <div class="toolbar">
+              <span class="badge ${escapeHtml(alert.severity)}">${escapeHtml(severityText(alert.severity))}</span>
+              <span class="badge">${escapeHtml(categoryText(alert.category))}</span>
+            </div>
+          </div>
+          <div class="meta">
+            EA：${alert.ea_id ? `<a href="/ea-detail?ea=${encodeURIComponent(alert.ea_id)}"><code>${escapeHtml(alert.ea_id)}</code></a>` : "-"}
+            ${alert.command_id ? ` · 命令：<a href="/commands?ea_id=${encodeURIComponent(alert.ea_id || "")}">#${escapeHtml(alert.command_id)}</a>` : ""}
+            · 已持续：${escapeHtml(ageText(alert.age_seconds))}
+          </div>
+          <div class="meta">
+            最后心跳：${escapeHtml(formatDate(alert.last_seen_at))}
+            · 最新快照：${escapeHtml(formatDate(alert.latest_snapshot_at))}
+            · 最新命令：${escapeHtml(formatDate(alert.latest_command_at))}
+          </div>
+          ${alert.action_url ? `<div><a href="${escapeHtml(alert.action_url)}">查看处理入口</a></div>` : ""}
+        </article>
+      `).join("");
+    }
+    async function loadAlerts() {
+      clearMsg();
+      alertPayload = await api("/api/admin/alerts");
+      renderSummary();
+      renderAlerts();
+      show("告警已刷新。");
+    }
+
+    els.adminToken.value = localStorage.getItem("ea-admin-token") || "";
+    els.saveTokenBtn.addEventListener("click", () => {
+      localStorage.setItem("ea-admin-token", els.adminToken.value.trim());
+      show("Token 已保存。");
+      loadAlerts().catch((error) => show(error.message || String(error), "err"));
+    });
+    els.refreshBtn.addEventListener("click", () => loadAlerts().catch((error) => show(error.message || String(error), "err")));
+    els.severityFilter.addEventListener("change", renderAlerts);
+    els.categoryFilter.addEventListener("change", renderAlerts);
+    loadAlerts().catch((error) => show(error.message || String(error), "err"));
+  </script>
+</body>
+</html>

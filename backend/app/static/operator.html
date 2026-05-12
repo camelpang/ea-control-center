@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>操作员工作台 · EA Control Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111f;
+      --panel: #101a2d;
+      --panel-alt: #17223a;
+      --border: #263653;
+      --text: #e5ecff;
+      --muted: #94a3c7;
+      --accent: #60a5fa;
+      --bad: #ef4444;
+      --warn: #f59e0b;
+      --ok: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1000px 520px at 50% -10%, #13264f 0%, var(--bg) 62%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 14px 22px;
+      background: rgba(8, 17, 31, 0.94);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    h1 { margin: 0; font-size: 1.22rem; }
+    h2 { margin: 0; font-size: 1rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    main { padding: 18px 22px 36px; display: grid; gap: 16px; }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(16, 26, 45, 0.88);
+      padding: 14px;
+      overflow: hidden;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .summary-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel-alt);
+      padding: 12px;
+    }
+    .summary-card .label { color: var(--muted); font-size: 13px; }
+    .summary-card .value { font-size: 24px; font-weight: 800; margin-top: 6px; }
+    .meta { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .input, .select, .button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-alt);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    .button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #2563eb, #1d4ed8);
+      font-weight: 700;
+    }
+    .button.secondary { background: #334155; }
+    .message {
+      display: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    .message.show { display: block; }
+    .message.ok { background: rgba(34, 197, 94, 0.14); color: #86efac; }
+    .message.err { background: rgba(239, 68, 68, 0.14); color: #fecaca; }
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 0.45fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .ea-grid { display: grid; gap: 10px; }
+    .ea-card {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-left: 4px solid #64748b;
+      border-radius: 14px;
+      background: rgba(8, 17, 31, 0.28);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .ea-card.high { border-left-color: var(--bad); }
+    .ea-card.watch { border-left-color: var(--warn); }
+    .ea-card.paused { border-left-color: var(--accent); }
+    .ea-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+    .ea-title { font-weight: 800; }
+    .badge {
+      display: inline-flex;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(96, 165, 250, 0.16);
+      color: #bfdbfe;
+      margin-right: 4px;
+    }
+    .badge.high, .badge.offline { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
+    .badge.watch { background: rgba(245, 158, 11, 0.18); color: #fde68a; }
+    .badge.normal, .badge.online { background: rgba(34, 197, 94, 0.14); color: #86efac; }
+    .badge.paused { background: rgba(96, 165, 250, 0.16); color: #bfdbfe; }
+    .alert-list { display: grid; gap: 10px; }
+    .alert-item {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 12px;
+      background: rgba(8, 17, 31, 0.28);
+      padding: 10px;
+    }
+    .empty {
+      padding: 22px;
+      color: var(--muted);
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+    }
+    @media (max-width: 1100px) {
+      .summary-grid, .content-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>操作员工作台</h1>
+      <div class="meta">聚焦自己负责的 EA、异常、未完成命令和当前订单。</div>
+    </div>
+    <nav class="toolbar">
+      <a href="/admin">管理控制台</a>
+      <a href="/alerts">生产告警中心</a>
+      <a href="/manual-trades">人工建仓管理</a>
+      <a href="/dashboard">监控大屏</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>鉴权</h2>
+      <div class="toolbar" style="margin-top: 10px;">
+        <input id="adminToken" class="input" type="password" placeholder="X-Admin-Token 或使用已登录 JWT" style="min-width: 280px;" />
+        <button id="saveTokenBtn" class="button" type="button">保存 Token</button>
+        <button id="refreshBtn" class="button secondary" type="button">刷新工作台</button>
+        <select id="riskFilter" class="select">
+          <option value="all">全部风险</option>
+          <option value="high">高风险</option>
+          <option value="watch">关注</option>
+          <option value="paused">暂停</option>
+          <option value="normal">正常</option>
+        </select>
+      </div>
+      <div id="msg" class="message" style="margin-top: 10px;"></div>
+    </section>
+
+    <section class="summary-grid">
+      <div class="summary-card"><div class="label">负责 EA</div><div id="totalEas" class="value">-</div></div>
+      <div class="summary-card"><div class="label">可交易 EA</div><div id="tradeableEas" class="value">-</div></div>
+      <div class="summary-card"><div class="label">离线 EA</div><div id="offlineEas" class="value">-</div></div>
+      <div class="summary-card"><div class="label">未完成命令</div><div id="activeCommands" class="value">-</div></div>
+      <div class="summary-card"><div class="label">当前持仓</div><div id="openPositions" class="value">-</div></div>
+      <div class="summary-card"><div class="label">当前挂单</div><div id="pendingOrders" class="value">-</div></div>
+    </section>
+
+    <section class="content-grid">
+      <div class="panel">
+        <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+          <h2>我的 EA</h2>
+          <div id="generatedAt" class="meta">尚未加载</div>
+        </div>
+        <div id="eaList" class="ea-grid"></div>
+      </div>
+      <aside class="panel">
+        <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+          <h2>待关注告警</h2>
+          <a href="/alerts">查看全部</a>
+        </div>
+        <div id="alertList" class="alert-list"></div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const els = {
+      adminToken: document.getElementById("adminToken"),
+      saveTokenBtn: document.getElementById("saveTokenBtn"),
+      refreshBtn: document.getElementById("refreshBtn"),
+      riskFilter: document.getElementById("riskFilter"),
+      msg: document.getElementById("msg"),
+      totalEas: document.getElementById("totalEas"),
+      tradeableEas: document.getElementById("tradeableEas"),
+      offlineEas: document.getElementById("offlineEas"),
+      activeCommands: document.getElementById("activeCommands"),
+      openPositions: document.getElementById("openPositions"),
+      pendingOrders: document.getElementById("pendingOrders"),
+      generatedAt: document.getElementById("generatedAt"),
+      eaList: document.getElementById("eaList"),
+      alertList: document.getElementById("alertList"),
+    };
+    let payload = { eas: [], alerts: [] };
+
+    function show(text, type = "ok") {
+      els.msg.textContent = text;
+      els.msg.className = "message show " + type;
+    }
+    function clearMsg() {
+      els.msg.className = "message";
+      els.msg.textContent = "";
+    }
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+    function getJwt() {
+      return (localStorage.getItem("ea-jwt") || "").trim();
+    }
+    function getToken() {
+      return (localStorage.getItem("ea-admin-token") || "").trim() || els.adminToken.value.trim();
+    }
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      const jwt = getJwt();
+      const legacy = getToken();
+      if (jwt) headers.Authorization = `Bearer ${jwt}`;
+      else if (legacy) headers["X-Admin-Token"] = legacy;
+      const res = await fetch(path, { ...options, headers });
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+      return text ? JSON.parse(text) : null;
+    }
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+    }
+    function riskText(value) {
+      return { high: "高风险", watch: "关注", paused: "暂停", normal: "正常" }[value] || value || "-";
+    }
+    function riskReason(value) {
+      return {
+        ea_offline: "EA 离线",
+        recent_command_issue: "最近命令失败/超时",
+        command_in_progress: "存在未完成命令",
+        trading_paused: "交易许可关闭",
+        normal: "正常",
+      }[value] || value || "-";
+    }
+    function filteredEas() {
+      const risk = els.riskFilter.value;
+      return (payload.eas || []).filter((ea) => risk === "all" || ea.risk_level === risk);
+    }
+    function renderSummary() {
+      els.totalEas.textContent = payload.total_eas ?? 0;
+      els.tradeableEas.textContent = payload.tradeable_eas ?? 0;
+      els.offlineEas.textContent = payload.offline_eas ?? 0;
+      els.activeCommands.textContent = payload.active_commands ?? 0;
+      els.openPositions.textContent = payload.open_positions ?? 0;
+      els.pendingOrders.textContent = payload.pending_orders ?? 0;
+      els.generatedAt.textContent = payload.generated_at ? `生成时间：${formatDate(payload.generated_at)} · ${escapeHtml(payload.username || "-")}` : "尚未加载";
+    }
+    function renderEas() {
+      const rows = filteredEas();
+      if (!rows.length) {
+        els.eaList.innerHTML = '<div class="empty">当前筛选下没有 EA。</div>';
+        return;
+      }
+      els.eaList.innerHTML = rows.map((ea) => `
+        <article class="ea-card ${escapeHtml(ea.risk_level)}">
+          <div class="ea-head">
+            <div>
+              <div class="ea-title"><a href="/ea-detail?ea=${encodeURIComponent(ea.ea_id)}"><code>${escapeHtml(ea.ea_id)}</code></a></div>
+              <div class="meta">${escapeHtml(ea.account_number || "-")} / ${escapeHtml(ea.broker || "-")}</div>
+            </div>
+            <div>
+              <span class="badge ${escapeHtml(ea.status)}">${escapeHtml(ea.status || "-")}</span>
+              <span class="badge ${escapeHtml(ea.risk_level)}">${escapeHtml(riskText(ea.risk_level))}</span>
+              <span class="badge">${ea.can_trade ? "可交易" : "只读"}</span>
+            </div>
+          </div>
+          <div class="meta">风险原因：${escapeHtml(riskReason(ea.risk_text))}</div>
+          <div class="meta">持仓 ${escapeHtml(ea.positions_count)} · 挂单 ${escapeHtml(ea.pending_orders_count)} · 未完成命令 ${escapeHtml(ea.active_commands_count)}</div>
+          <div class="meta">最后心跳：${escapeHtml(formatDate(ea.last_seen_at))} · 最新快照：${escapeHtml(formatDate(ea.latest_snapshot_at))}</div>
+          <div class="toolbar">
+            <a href="/manual-trades?ea=${encodeURIComponent(ea.ea_id)}">进入人工处理</a>
+            <a href="/commands?ea_id=${encodeURIComponent(ea.ea_id)}">查看命令</a>
+          </div>
+        </article>
+      `).join("");
+    }
+    function renderAlerts() {
+      const alerts = payload.alerts || [];
+      if (!alerts.length) {
+        els.alertList.innerHTML = '<div class="empty">暂无需要关注的告警。</div>';
+        return;
+      }
+      els.alertList.innerHTML = alerts.map((alert) => `
+        <div class="alert-item">
+          <div><strong>${escapeHtml(alert.title)}</strong> <span class="badge ${escapeHtml(alert.severity)}">${escapeHtml(alert.severity)}</span></div>
+          <div class="meta">${escapeHtml(alert.message)}</div>
+          <div class="meta">EA：${alert.ea_id ? `<a href="/ea-detail?ea=${encodeURIComponent(alert.ea_id)}">${escapeHtml(alert.ea_id)}</a>` : "-"}</div>
+        </div>
+      `).join("");
+    }
+    async function loadWorkbench() {
+      clearMsg();
+      payload = await api("/api/admin/operator-workbench");
+      renderSummary();
+      renderEas();
+      renderAlerts();
+      show("操作员工作台已刷新。");
+    }
+
+    els.adminToken.value = localStorage.getItem("ea-admin-token") || "";
+    els.saveTokenBtn.addEventListener("click", () => {
+      localStorage.setItem("ea-admin-token", els.adminToken.value.trim());
+      show("Token 已保存。");
+      loadWorkbench().catch((error) => show(error.message || String(error), "err"));
+    });
+    els.refreshBtn.addEventListener("click", () => loadWorkbench().catch((error) => show(error.message || String(error), "err")));
+    els.riskFilter.addEventListener("change", renderEas);
+    loadWorkbench().catch((error) => show(error.message || String(error), "err"));
+  </script>
+</body>
+</html>

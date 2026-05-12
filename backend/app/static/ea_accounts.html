@@ -150,6 +150,8 @@
     .badge.online { background: rgba(34, 197, 94, 0.16); color: #86efac; }
     .badge.offline { background: rgba(239, 68, 68, 0.16); color: #fecaca; }
     .badge.manual { background: rgba(245, 158, 11, 0.16); color: #fde68a; }
+    .badge.archived { background: rgba(100, 116, 139, 0.22); color: #cbd5e1; }
+    .badge.disabled { background: rgba(239, 68, 68, 0.2); color: #fecaca; }
     .empty { padding: 22px; color: var(--muted); text-align: center; }
     .modal-backdrop {
       position: fixed;
@@ -255,6 +257,11 @@
             <option value="offline">离线</option>
             <option value="paused">暂停交易</option>
           </select>
+          <select id="lifecycleFilter" class="select">
+            <option value="active" selected>在用账号</option>
+            <option value="archived">已归档</option>
+            <option value="all">全部生命周期</option>
+          </select>
           <select id="tokenFilter" class="select">
             <option value="all">全部Token</option>
             <option value="token_set">已设置Token</option>
@@ -270,6 +277,8 @@
           <button id="nextPageBtn" class="button secondary" type="button" style="width:auto;">下一页</button>
           <span id="selectedCount" class="meta">已选择 0 个 EA</span>
           <button id="bulkAssignBtn" class="button" type="button" style="width:auto;">分配已选EA</button>
+          <button id="bulkArchiveBtn" class="button danger" type="button" style="width:auto;">归档已选</button>
+          <button id="bulkRestoreBtn" class="button secondary" type="button" style="width:auto;">恢复已选</button>
           <button id="exportCsvBtn" class="button secondary" type="button" style="width:auto;">导出 CSV</button>
           <button id="clearEaFiltersBtn" class="button secondary" type="button" style="width:auto;">清空筛选</button>
           <button id="refreshBtn" class="button secondary" type="button" style="width:auto;">刷新</button>
@@ -316,6 +325,18 @@
     </div>
   </div>
 
+  <div id="lifecycleModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="lifecycleModalTitle">
+    <div class="modal">
+      <h2 id="lifecycleModalTitle">EA 生命周期操作</h2>
+      <div id="lifecycleModalMessage" class="meta"></div>
+      <textarea id="lifecycleReason" class="token-output" placeholder="原因 / 备注（可选）"></textarea>
+      <div class="toolbar" style="justify-content:flex-end;margin-top:14px;">
+        <button id="lifecycleCancelBtn" class="button secondary" type="button" style="width:auto;">取消</button>
+        <button id="lifecycleConfirmBtn" class="button" type="button" style="width:auto;">确认</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const els = {
       msg: document.getElementById("msg"),
@@ -333,6 +354,7 @@
       eaSearch: document.getElementById("eaSearch"),
       assignmentFilter: document.getElementById("assignmentFilter"),
       statusFilter: document.getElementById("statusFilter"),
+      lifecycleFilter: document.getElementById("lifecycleFilter"),
       tokenFilter: document.getElementById("tokenFilter"),
       pageSizeSelect: document.getElementById("pageSizeSelect"),
       prevPageBtn: document.getElementById("prevPageBtn"),
@@ -340,6 +362,8 @@
       nextPageBtn: document.getElementById("nextPageBtn"),
       selectedCount: document.getElementById("selectedCount"),
       bulkAssignBtn: document.getElementById("bulkAssignBtn"),
+      bulkArchiveBtn: document.getElementById("bulkArchiveBtn"),
+      bulkRestoreBtn: document.getElementById("bulkRestoreBtn"),
       exportCsvBtn: document.getElementById("exportCsvBtn"),
       clearEaFiltersBtn: document.getElementById("clearEaFiltersBtn"),
       bulkAssignPanel: document.getElementById("bulkAssignPanel"),
@@ -360,6 +384,12 @@
       tokenCopyBtn: document.getElementById("tokenCopyBtn"),
       tokenConfirmBtn: document.getElementById("tokenConfirmBtn"),
       tokenCloseBtn: document.getElementById("tokenCloseBtn"),
+      lifecycleModal: document.getElementById("lifecycleModal"),
+      lifecycleModalTitle: document.getElementById("lifecycleModalTitle"),
+      lifecycleModalMessage: document.getElementById("lifecycleModalMessage"),
+      lifecycleReason: document.getElementById("lifecycleReason"),
+      lifecycleCancelBtn: document.getElementById("lifecycleCancelBtn"),
+      lifecycleConfirmBtn: document.getElementById("lifecycleConfirmBtn"),
     };
     let eas = [];
     let assignments = [];
@@ -369,6 +399,7 @@
     let initialEaFilterApplied = false;
     let currentPage = 1;
     let pendingTokenEaId = "";
+    let pendingLifecycleAction = null;
 
     function show(text, type = "ok") {
       els.msg.textContent = text;
@@ -515,6 +546,7 @@
       els.eaSearch.value = eaId;
       els.assignmentFilter.value = "all";
       els.statusFilter.value = "all";
+      els.lifecycleFilter.value = "all";
       els.tokenFilter.value = "all";
       show(`已自动筛选 EA：${eaId}`);
       setTimeout(() => els.eaTable.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
@@ -523,6 +555,7 @@
       els.eaSearch.value = "";
       els.assignmentFilter.value = "all";
       els.statusFilter.value = "all";
+      els.lifecycleFilter.value = "active";
       els.tokenFilter.value = "all";
       currentPage = 1;
       history.replaceState(null, "", window.location.pathname);
@@ -553,9 +586,13 @@
       const q = (els.eaSearch.value || "").trim().toLowerCase();
       const assignmentFilter = els.assignmentFilter.value;
       const statusFilter = els.statusFilter.value;
+      const lifecycleFilter = els.lifecycleFilter.value;
       const tokenFilter = els.tokenFilter.value;
       return eas.filter((ea) => {
         const assigned = Array.isArray(ea.assigned_users) && ea.assigned_users.length > 0;
+        const lifecycle = ea.lifecycle_status || "active";
+        if (lifecycleFilter === "active" && lifecycle === "archived") return false;
+        if (lifecycleFilter === "archived" && lifecycle !== "archived") return false;
         if (assignmentFilter === "assigned" && !assigned) return false;
         if (assignmentFilter === "unassigned" && assigned) return false;
         if (statusFilter === "online" && ea.status !== "online") return false;
@@ -587,6 +624,8 @@
       });
       els.selectedCount.textContent = `已选择 ${selectedEaIds.size} 个 EA`;
       els.bulkAssignBtn.disabled = selectedEaIds.size === 0;
+      els.bulkArchiveBtn.disabled = selectedEaIds.size === 0;
+      els.bulkRestoreBtn.disabled = selectedEaIds.size === 0;
       if (!els.bulkAssignPanel.classList.contains("hidden")) renderBulkAssignPreview();
     }
     function renderBulkUserOptions() {
@@ -646,6 +685,17 @@
       const cls = value === "online" ? "online" : (value === "offline" ? "offline" : "manual");
       return `<span class="badge ${cls}">${escapeHtml(value)}</span>`;
     }
+    function lifecycleBadge(ea) {
+      const value = ea.lifecycle_status || "active";
+      const labels = { active: "在用", paused: "已暂停", archived: "已归档", disabled: "已停用" };
+      return `<span class="badge ${escapeHtml(value)}">${escapeHtml(labels[value] || value)}</span>`;
+    }
+    function lifecycleMeta(ea) {
+      if ((ea.lifecycle_status || "active") !== "archived") return "";
+      const reason = ea.archive_reason ? `原因：${escapeHtml(ea.archive_reason)}` : "未填写归档原因";
+      const by = ea.archived_by ? `；操作人：${escapeHtml(ea.archived_by)}` : "";
+      return `<div class="meta">${reason}${by}</div>`;
+    }
     function renderEas() {
       const list = visibleEas();
       const pageRows = pagedEas(list);
@@ -657,7 +707,7 @@
       }
       els.eaTable.innerHTML = `
         <table>
-          <thead><tr><th>${isAdmin() ? '<input id="selectAllVisibleEa" class="ea-check" type="checkbox" />' : ""}</th><th>EA ID</th><th>交易账号</th><th>Broker</th><th>状态</th><th>Token</th><th>分配详情</th><th>操作</th></tr></thead>
+          <thead><tr><th>${isAdmin() ? '<input id="selectAllVisibleEa" class="ea-check" type="checkbox" />' : ""}</th><th>EA ID</th><th>交易账号</th><th>Broker</th><th>状态</th><th>生命周期</th><th>Token</th><th>分配详情</th><th>操作</th></tr></thead>
           <tbody>
             ${pageRows.map((ea) => `
               <tr>
@@ -666,12 +716,16 @@
                 <td>${isAdmin() ? `<input class="table-input" data-ea-account="${escapeHtml(ea.ea_id)}" value="${escapeHtml(ea.account_number || "")}" placeholder="账号" />` : escapeHtml(ea.account_number || "-")}</td>
                 <td>${isAdmin() ? `<input class="table-input" data-ea-broker="${escapeHtml(ea.ea_id)}" value="${escapeHtml(ea.broker || "")}" placeholder="Broker" />` : escapeHtml(ea.broker || "-")}</td>
                 <td>${statusBadge(ea.status)}</td>
+                <td>${lifecycleBadge(ea)}${lifecycleMeta(ea)}</td>
                 <td>${ea.has_ea_token ? '<span class="badge">已设置</span>' : '<span class="meta">未设置</span>'}</td>
                 <td>${shortAssignedUsers(ea)}</td>
                 <td>${isAdmin() ? `
                   <div class="toolbar">
                     <button class="button secondary" style="width:auto;padding:6px 10px;" data-save-ea="${escapeHtml(ea.ea_id)}" type="button">保存</button>
                     <button class="button secondary" style="width:auto;padding:6px 10px;" data-rotate-token="${escapeHtml(ea.ea_id)}" type="button">生成Token</button>
+                    ${(ea.lifecycle_status || "active") === "archived"
+                      ? `<button class="button" style="width:auto;padding:6px 10px;" data-restore-ea="${escapeHtml(ea.ea_id)}" type="button">恢复</button>`
+                      : `<button class="button danger" style="width:auto;padding:6px 10px;" data-archive-ea="${escapeHtml(ea.ea_id)}" type="button">归档</button>`}
                   </div>` : '<span class="meta">只读</span>'}</td>
               </tr>
             `).join("")}
@@ -758,6 +812,70 @@
       await loadAll();
       show(`EA ${eaId} 已保存。`);
     }
+    async function archiveEa(eaId) {
+      openLifecycleModal("archive", [eaId]);
+    }
+    async function restoreEa(eaId) {
+      openLifecycleModal("restore", [eaId]);
+    }
+    function openBulkLifecycleModal(action) {
+      const eaIds = selectedEaRows().map((ea) => ea.ea_id);
+      if (!eaIds.length) {
+        show("请先选择至少一个 EA。", "err");
+        return;
+      }
+      openLifecycleModal(action, eaIds);
+    }
+    function openLifecycleModal(action, eaIds) {
+      pendingLifecycleAction = { action, eaIds };
+      const isArchive = action === "archive";
+      const single = eaIds.length === 1;
+      els.lifecycleModalTitle.textContent = single
+        ? (isArchive ? `归档 EA：${eaIds[0]}` : `恢复 EA：${eaIds[0]}`)
+        : (isArchive ? `批量归档 ${eaIds.length} 个 EA` : `批量恢复 ${eaIds.length} 个 EA`);
+      els.lifecycleModalMessage.textContent = isArchive
+        ? "归档后会默认从监控大屏和人工交易页面隐藏，并禁止继续下发交易命令。历史记录仍可查询。"
+        : "恢复后该 EA 会重新进入在用账号列表；是否允许交易仍以交易许可和用户权限为准。";
+      if (!single) {
+        els.lifecycleModalMessage.textContent += ` 本次目标：${eaIds.slice(0, 8).join("、")}${eaIds.length > 8 ? "..." : ""}`;
+      }
+      els.lifecycleReason.value = "";
+      els.lifecycleConfirmBtn.textContent = isArchive ? "确认归档" : "确认恢复";
+      els.lifecycleModal.classList.add("show");
+    }
+    function closeLifecycleModal() {
+      pendingLifecycleAction = null;
+      els.lifecycleModal.classList.remove("show");
+    }
+    async function confirmLifecycleAction() {
+      if (!pendingLifecycleAction) return;
+      els.lifecycleConfirmBtn.disabled = true;
+      try {
+        const { action, eaIds } = pendingLifecycleAction;
+        const reason = els.lifecycleReason.value.trim();
+        const results = await Promise.allSettled(eaIds.map((eaId) =>
+          api(`/api/admin/eas/${encodeURIComponent(eaId)}/${action}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason }),
+          }).then(() => eaId)
+        ));
+        const successful = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
+        const failed = results.filter((result) => result.status === "rejected");
+        if (action === "archive") successful.forEach((eaId) => selectedEaIds.delete(eaId));
+        if (action === "restore") els.lifecycleFilter.value = "all";
+        closeLifecycleModal();
+        await loadAll();
+        show(
+          failed.length
+            ? `${action === "archive" ? "归档" : "恢复"}完成：成功 ${successful.length} 个，失败 ${failed.length} 个。`
+            : (action === "archive" ? `已归档 ${successful.length} 个 EA，默认列表和交易页面会隐藏这些账号。` : `已恢复 ${successful.length} 个 EA。`),
+          failed.length ? "err" : "ok"
+        );
+      } finally {
+        els.lifecycleConfirmBtn.disabled = false;
+      }
+    }
     function openTokenModal(eaId) {
       pendingTokenEaId = eaId;
       els.tokenModalTitle.textContent = `为 ${eaId} 生成 EA Token`;
@@ -811,7 +929,7 @@
         show("当前筛选结果为空，无需导出。", "err");
         return;
       }
-      const header = ["EA ID", "交易账号", "Broker", "终端", "状态", "允许交易", "Token状态", "分配详情", "最后心跳", "更新时间"];
+      const header = ["EA ID", "交易账号", "Broker", "终端", "状态", "生命周期", "允许交易", "Token状态", "分配详情", "归档原因", "最后心跳", "更新时间"];
       const lines = [
         header.map(csvCell).join(","),
         ...rows.map((ea) => [
@@ -820,9 +938,11 @@
           ea.broker,
           ea.terminal,
           ea.status,
+          ea.lifecycle_status || "active",
           ea.allow_trading === false ? "否" : "是",
           ea.has_ea_token ? "已设置" : "未设置",
           isAdmin() ? assignmentSummaryForEa(ea.ea_id) : (ea.assigned_users || []).join("；"),
+          ea.archive_reason,
           ea.last_seen_at,
           ea.updated_at,
         ].map(csvCell).join(",")),
@@ -902,6 +1022,8 @@
     bind("createEaBtn", createEa);
     bind("generateEaIdBtn", generateEaId);
     bind("bulkAssignBtn", openBulkAssignPanel);
+    bind("bulkArchiveBtn", () => openBulkLifecycleModal("archive"));
+    bind("bulkRestoreBtn", () => openBulkLifecycleModal("restore"));
     bind("confirmBulkAssignBtn", confirmBulkAssign);
     bind("exportCsvBtn", exportEasCsv);
     bind("clearEaFiltersBtn", clearEaFilters);
@@ -911,6 +1033,11 @@
     els.tokenCloseBtn.addEventListener("click", closeTokenModal);
     els.tokenModal.addEventListener("click", (event) => {
       if (event.target === els.tokenModal) closeTokenModal();
+    });
+    els.lifecycleCancelBtn.addEventListener("click", closeLifecycleModal);
+    bind("lifecycleConfirmBtn", confirmLifecycleAction);
+    els.lifecycleModal.addEventListener("click", (event) => {
+      if (event.target === els.lifecycleModal) closeLifecycleModal();
     });
     document.getElementById("cancelBulkAssignBtn").addEventListener("click", () => {
       els.bulkAssignPanel.classList.add("hidden");
@@ -924,6 +1051,7 @@
     els.eaSearch.addEventListener("input", resetPageAndRenderEas);
     els.assignmentFilter.addEventListener("change", resetPageAndRenderEas);
     els.statusFilter.addEventListener("change", resetPageAndRenderEas);
+    els.lifecycleFilter.addEventListener("change", resetPageAndRenderEas);
     els.tokenFilter.addEventListener("change", resetPageAndRenderEas);
     els.pageSizeSelect.addEventListener("change", resetPageAndRenderEas);
     els.prevPageBtn.addEventListener("click", () => {
@@ -941,6 +1069,24 @@
       if (saveButton) {
         try {
           await saveEaFromRow(saveButton.dataset.saveEa);
+        } catch (error) {
+          show(error.message || String(error), "err");
+        }
+        return;
+      }
+      const archiveButton = target.closest("[data-archive-ea]");
+      if (archiveButton) {
+        try {
+          await archiveEa(archiveButton.dataset.archiveEa);
+        } catch (error) {
+          show(error.message || String(error), "err");
+        }
+        return;
+      }
+      const restoreButton = target.closest("[data-restore-ea]");
+      if (restoreButton) {
+        try {
+          await restoreEa(restoreButton.dataset.restoreEa);
         } catch (error) {
           show(error.message || String(error), "err");
         }

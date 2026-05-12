@@ -108,6 +108,18 @@ Verify the backup file is not empty:
 ls -lh /opt/ea-control-center/backups
 ```
 
+Run a restore drill into a temporary database before connecting live EAs:
+
+```bash
+scripts/restore-drill-postgres.sh backups/ea_control_YYYYmmdd_HHMMSS.sql
+```
+
+Detailed procedure:
+
+```text
+docs/backup-restore-drill.md
+```
+
 ## 5. Network And Access
 
 - Keep Uvicorn bound behind Docker or a reverse proxy; do not expose it directly to the public internet.
@@ -135,6 +147,7 @@ In the admin UI:
 - Confirm trading safety config shows the intended symbol whitelist and volume cap.
 - Create or log in as an admin user.
 - Generate dedicated EA tokens from `/ea-accounts`.
+- Review `/alerts`, `/operator`, and `/reports` using `docs/operations-console-guide.md`.
 
 ## 7. Controlled Live Test
 

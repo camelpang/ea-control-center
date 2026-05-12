@@ -8,7 +8,7 @@ This document records the current command and safety rules for the EA Control Ce
 - The EA reports `executing` when it begins processing a command.
 - Final states are `success`, `failed`, `timeout`, and `cancelled`.
 - Admin cancellation is allowed only while a command is `pending` or `received`.
-- Commands that pass `expires_at` while still `pending` or `received` are marked `timeout`.
+- Commands that pass `expires_at` while still `pending`, `received`, or `executing` are marked `timeout`.
 
 ## Per-EA Command Locking
 
@@ -51,6 +51,9 @@ Manual management is treated as a derived operational state:
 
 The backend validates command payloads even if a user bypasses the UI.
 
+- EA accounts have a lifecycle status: `active`, `paused`, `archived`, or `disabled`.
+- `archived` and `disabled` EA accounts reject new trading commands at the API layer.
+- Archived EAs are hidden from the default dashboard/manual trading views and remain available in account history for audit.
 - `open_order` requires `symbol`, `side`, and positive `volume`.
 - `volume` must be less than or equal to `MAX_MANUAL_ORDER_VOLUME`.
 - `ALLOWED_TRADE_SYMBOLS` defaults to `XAUUSD`; symbols outside the whitelist are rejected.
@@ -77,3 +80,8 @@ Command creation logs include:
 - command type
 - requested_by
 - a sanitized payload summary with key trading fields
+
+Lifecycle changes are also audited:
+
+- `ea.archived` records the operator and optional retirement reason.
+- `ea.restored` records the operator and optional restore reason.

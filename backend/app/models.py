@@ -42,6 +42,13 @@ class UserRole(str, enum.Enum):
     viewer = "viewer"
 
 
+class EALifecycleStatus(str, enum.Enum):
+    active = "active"
+    paused = "paused"
+    archived = "archived"
+    disabled = "disabled"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -64,9 +71,15 @@ class EAInstance(Base):
     strategy_name: Mapped[str | None] = mapped_column(String(128))
     version: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(32), default="online")
+    lifecycle_status: Mapped[EALifecycleStatus] = mapped_column(
+        Enum(EALifecycleStatus, name="ea_lifecycle_status"), default=EALifecycleStatus.active
+    )
     allow_trading: Mapped[bool] = mapped_column(Boolean, default=True)
     api_token_hash: Mapped[str | None] = mapped_column(String(255))
     api_token_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    archived_by: Mapped[str | None] = mapped_column(String(128))
+    archive_reason: Mapped[str | None] = mapped_column(Text)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)

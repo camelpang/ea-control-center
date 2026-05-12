@@ -143,7 +143,22 @@ Backups are written to:
 /opt/ea-control-center/backups/
 ```
 
-## 5. Optional Write Smoke Test
+## 5. Restore Drill
+
+Before production testing, prove that a backup can be restored into a temporary database:
+
+```bash
+cd /opt/ea-control-center
+scripts/restore-drill-postgres.sh backups/ea_control_YYYYmmdd_HHMMSS.sql
+```
+
+See the full procedure:
+
+```text
+docs/backup-restore-drill.md
+```
+
+## 6. Optional Write Smoke Test
 
 Only run this against a safe test EA ID. It writes a heartbeat and creates then cancels a non-trading `update_params` command.
 
@@ -156,7 +171,7 @@ export SMOKE_EA_ID="production-smoke-ea"
 scripts/production-smoke-test.sh http://127.0.0.1:8000
 ```
 
-## 6. Rollback
+## 7. Rollback
 
 If a deployment fails after `git pull` but before live testing:
 
@@ -178,14 +193,23 @@ docker compose up -d backend
 
 For destructive restores, prefer testing on a copied database first.
 
-## 7. After Deployment
+## 8. After Deployment
 
 Open `/admin` and check:
 
 - `系统自检`
 - EA account visibility
 - dedicated per-EA token status
+- `/alerts`
+- `/operator`
+- `/reports`
 - `/commands`
 - `/audit-logs`
 
 Connect one low-risk EA first, verify heartbeat and snapshot, then continue controlled production testing.
+
+For daily operation page usage, see:
+
+```text
+docs/operations-console-guide.md
+```

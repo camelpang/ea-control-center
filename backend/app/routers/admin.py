@@ -15,6 +15,7 @@ from app.models import (
     CommandLog,
     CommandStatus,
     CommandType,
+    EALifecycleStatus,
     EAInstance,
     EAUserAssignment,
     PendingOrder,
@@ -33,11 +34,15 @@ from app.schemas import (
     EAAssignmentUpdateIn,
     EACreateIn,
     EADashboardCardOut,
+    EALifecycleUpdateIn,
     EATokenOut,
     EAOut,
     MessageOut,
+    OperatorWorkbenchOut,
+    OperationsReportOut,
     PendingOrderOut,
     PositionOut,
+    ProductionAlertSummaryOut,
     SafetyConfigOut,
     SystemCheckOut,
     SystemCheckItemOut,
@@ -119,6 +124,31 @@ def require_ea_access(
     if trade and not assignment.can_trade:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="EA trade permission required")
     return ea
+
+
+def require_ea_accepts_trading_commands(ea: EAInstance) -> None:
+    if ea.lifecycle_status in {EALifecycleStatus.archived, EALifecycleStatus.disabled}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="EA 已归档或停用，不能下发交易命令")
+
+
+def ea_out_from_instance(ea: EAInstance, **extra) -> dict:
+    return {
+        "ea_id": ea.ea_id,
+        "account_number": ea.account_number,
+        "broker": ea.broker,
+        "terminal": ea.terminal,
+        "strategy_name": ea.strategy_name,
+        "version": ea.version,
+        "status": ea.status,
+        "lifecycle_status": ea.lifecycle_status,
+        "allow_trading": ea.allow_trading,
+        "archived_at": ea.archived_at,
+        "archived_by": ea.archived_by,
+        "archive_reason": ea.archive_reason,
+        "last_seen_at": ea.last_seen_at,
+        "updated_at": ea.updated_at,
+        **extra,
+    }
 
 
 def _assignment_out(row: EAUserAssignment) -> dict:
@@ -372,6 +402,425 @@ def _latest_snapshots_by_ea_id(db: Session, principal: AdminPrincipal) -> dict[s
     return {r.ea_id: r for r in rows}
 
 
+def _aware(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=utc_now().tzinfo)
+    return dt
+
+
+def _seconds_between(now, then) -> int | None:
+    then = _aware(then)
+    if then is None:
+        return None
+    return max(0, int((now - then).total_seconds()))
+
+
+def _alert_sort_key(alert: dict) -> tuple[int, int, str]:
+    severity_order = {"critical": 0, "warning": 1, "info": 2}
+    return (severity_order.get(alert["severity"], 9), -(alert.get("age_seconds") or 0), alert["id"])
+
+
+def _build_production_alerts(db: Session, principal: AdminPrincipal) -> dict:
+    now = utc_now()
+    offline_seconds = settings.ea_offline_seconds
+    snapshot_stale_seconds = max(offline_seconds * 2, 300)
+    active_command_stale_seconds = max(settings.command_timeout_seconds, 120)
+
+    eas = list(
+        db.scalars(
+            select(EAInstance)
+            .where(EAInstance.ea_id.in_(visible_ea_ids_stmt(principal)), EAInstance.lifecycle_status != EALifecycleStatus.archived)
+            .order_by(EAInstance.ea_id.asc())
+        )
+    )
+    latest_snapshots = _latest_snapshots_by_ea_id(db, principal)
+
+    latest_commands = {}
+    for command in db.scalars(
+        select(Command)
+        .where(Command.ea_id.in_(visible_ea_ids_stmt(principal)))
+        .order_by(Command.ea_id.asc(), desc(Command.created_at))
+    ):
+        latest_commands.setdefault(command.ea_id, command)
+
+    position_counts = {
+        ea_id: count
+        for ea_id, count in db.execute(
+            select(Position.ea_id, func.count(Position.id))
+            .where(Position.ea_id.in_(visible_ea_ids_stmt(principal)))
+            .group_by(Position.ea_id)
+        ).all()
+    }
+    pending_order_counts = {
+        ea_id: count
+        for ea_id, count in db.execute(
+            select(PendingOrder.ea_id, func.count(PendingOrder.id))
+            .where(PendingOrder.ea_id.in_(visible_ea_ids_stmt(principal)))
+            .group_by(PendingOrder.ea_id)
+        ).all()
+    }
+
+    alerts: list[dict] = []
+    for ea in eas:
+        last_seen_age = _seconds_between(now, ea.last_seen_at)
+        snapshot = latest_snapshots.get(ea.ea_id)
+        snapshot_age = _seconds_between(now, snapshot.created_at if snapshot else None)
+        latest_command = latest_commands.get(ea.ea_id)
+        command_age = _seconds_between(now, latest_command.updated_at if latest_command else None)
+        open_order_count = position_counts.get(ea.ea_id, 0) + pending_order_counts.get(ea.ea_id, 0)
+
+        if last_seen_age is None or last_seen_age > offline_seconds:
+            alerts.append(
+                {
+                    "id": f"ea-offline:{ea.ea_id}",
+                    "severity": "critical" if open_order_count else "warning",
+                    "category": "ea_offline",
+                    "title": "EA 离线",
+                    "message": f"EA 超过 {offline_seconds} 秒未上报心跳；当前订单数 {open_order_count}。",
+                    "ea_id": ea.ea_id,
+                    "status": "offline",
+                    "detected_at": now,
+                    "last_seen_at": ea.last_seen_at,
+                    "latest_snapshot_at": snapshot.created_at if snapshot else None,
+                    "latest_command_at": latest_command.updated_at if latest_command else None,
+                    "age_seconds": last_seen_age,
+                    "action_url": f"/ea-detail?ea={ea.ea_id}",
+                }
+            )
+        if snapshot_age is None or snapshot_age > snapshot_stale_seconds:
+            alerts.append(
+                {
+                    "id": f"snapshot-stale:{ea.ea_id}",
+                    "severity": "warning",
+                    "category": "snapshot_stale",
+                    "title": "快照过期",
+                    "message": f"EA 最新快照超过 {snapshot_stale_seconds} 秒未更新，页面持仓/挂单可能不是最新状态。",
+                    "ea_id": ea.ea_id,
+                    "status": "stale",
+                    "detected_at": now,
+                    "last_seen_at": ea.last_seen_at,
+                    "latest_snapshot_at": snapshot.created_at if snapshot else None,
+                    "latest_command_at": latest_command.updated_at if latest_command else None,
+                    "age_seconds": snapshot_age,
+                    "action_url": f"/ea-detail?ea={ea.ea_id}",
+                }
+            )
+        if latest_command and latest_command.status in {CommandStatus.failed, CommandStatus.timeout}:
+            alerts.append(
+                {
+                    "id": f"command-{latest_command.status.value}:{latest_command.id}",
+                    "severity": "critical",
+                    "category": "command_issue",
+                    "title": "命令失败或超时",
+                    "message": f"最近命令 {latest_command.id}（{latest_command.command_type.value}）状态为 {latest_command.status.value}。",
+                    "ea_id": ea.ea_id,
+                    "command_id": latest_command.id,
+                    "status": latest_command.status.value,
+                    "detected_at": now,
+                    "last_seen_at": ea.last_seen_at,
+                    "latest_snapshot_at": snapshot.created_at if snapshot else None,
+                    "latest_command_at": latest_command.updated_at,
+                    "age_seconds": command_age,
+                    "action_url": f"/commands?ea_id={ea.ea_id}",
+                }
+            )
+        if latest_command and latest_command.status in {CommandStatus.pending, CommandStatus.received, CommandStatus.executing}:
+            severity = "critical" if (command_age or 0) > active_command_stale_seconds else "warning"
+            alerts.append(
+                {
+                    "id": f"command-active:{latest_command.id}",
+                    "severity": severity,
+                    "category": "command_active",
+                    "title": "命令未完成",
+                    "message": f"命令 {latest_command.id}（{latest_command.command_type.value}）仍处于 {latest_command.status.value}。",
+                    "ea_id": ea.ea_id,
+                    "command_id": latest_command.id,
+                    "status": latest_command.status.value,
+                    "detected_at": now,
+                    "last_seen_at": ea.last_seen_at,
+                    "latest_snapshot_at": snapshot.created_at if snapshot else None,
+                    "latest_command_at": latest_command.updated_at,
+                    "age_seconds": command_age,
+                    "action_url": f"/commands?ea_id={ea.ea_id}",
+                }
+            )
+        if ea.lifecycle_status == EALifecycleStatus.disabled or ea.allow_trading is False:
+            alerts.append(
+                {
+                    "id": f"trading-paused:{ea.ea_id}",
+                    "severity": "info",
+                    "category": "trading_paused",
+                    "title": "交易许可关闭",
+                    "message": "该 EA 当前不允许自动交易；如非计划内暂停，请检查操作记录。",
+                    "ea_id": ea.ea_id,
+                    "status": "paused",
+                    "detected_at": now,
+                    "last_seen_at": ea.last_seen_at,
+                    "latest_snapshot_at": snapshot.created_at if snapshot else None,
+                    "latest_command_at": latest_command.updated_at if latest_command else None,
+                    "age_seconds": last_seen_age,
+                    "action_url": f"/ea-detail?ea={ea.ea_id}",
+                }
+            )
+
+    alerts.sort(key=_alert_sort_key)
+    return {
+        "generated_at": now,
+        "total": len(alerts),
+        "critical": sum(1 for alert in alerts if alert["severity"] == "critical"),
+        "warning": sum(1 for alert in alerts if alert["severity"] == "warning"),
+        "info": sum(1 for alert in alerts if alert["severity"] == "info"),
+        "alerts": alerts,
+    }
+
+
+@router.get("/alerts", response_model=ProductionAlertSummaryOut)
+def production_alerts(
+    db: Session = Depends(get_db),
+    principal: AdminPrincipal = Depends(require_console_access),
+) -> dict:
+    return _build_production_alerts(db, principal)
+
+
+@router.get("/operator-workbench", response_model=OperatorWorkbenchOut)
+def operator_workbench(
+    db: Session = Depends(get_db),
+    principal: AdminPrincipal = Depends(require_console_access),
+) -> dict:
+    now = utc_now()
+    timeout_window = timedelta(seconds=settings.ea_offline_seconds)
+    eas = list(
+        db.scalars(
+            select(EAInstance)
+            .where(EAInstance.ea_id.in_(visible_ea_ids_stmt(principal)), EAInstance.lifecycle_status != EALifecycleStatus.archived)
+            .order_by(desc(EAInstance.last_seen_at))
+        )
+    )
+    visible_ids = [ea.ea_id for ea in eas]
+
+    assignments_by_ea: dict[str, EAUserAssignment] = {}
+    if principal.role != UserRole.admin.value and visible_ids:
+        for assignment in db.scalars(
+            select(EAUserAssignment)
+            .join(User, User.id == EAUserAssignment.user_id)
+            .where(
+                User.username == principal.subject,
+                User.is_active.is_(True),
+                EAUserAssignment.ea_id.in_(visible_ids),
+                EAUserAssignment.revoked_at.is_(None),
+            )
+        ):
+            assignments_by_ea[assignment.ea_id] = assignment
+
+    position_counts = {
+        ea_id: count
+        for ea_id, count in db.execute(
+            select(Position.ea_id, func.count(Position.id))
+            .where(Position.ea_id.in_(visible_ea_ids_stmt(principal)))
+            .group_by(Position.ea_id)
+        ).all()
+    }
+    pending_order_counts = {
+        ea_id: count
+        for ea_id, count in db.execute(
+            select(PendingOrder.ea_id, func.count(PendingOrder.id))
+            .where(PendingOrder.ea_id.in_(visible_ea_ids_stmt(principal)))
+            .group_by(PendingOrder.ea_id)
+        ).all()
+    }
+    latest_snapshot_times = {
+        ea_id: created_at
+        for ea_id, created_at in db.execute(
+            select(AccountSnapshot.ea_id, func.max(AccountSnapshot.created_at))
+            .where(AccountSnapshot.ea_id.in_(visible_ea_ids_stmt(principal)))
+            .group_by(AccountSnapshot.ea_id)
+        ).all()
+    }
+    latest_commands: dict[str, Command] = {}
+    active_command_counts: dict[str, int] = {}
+    for command in db.scalars(
+        select(Command)
+        .where(Command.ea_id.in_(visible_ea_ids_stmt(principal)))
+        .order_by(Command.ea_id.asc(), desc(Command.created_at))
+    ):
+        latest_commands.setdefault(command.ea_id, command)
+        if command.status in {CommandStatus.pending, CommandStatus.received, CommandStatus.executing}:
+            active_command_counts[command.ea_id] = active_command_counts.get(command.ea_id, 0) + 1
+
+    rows: list[dict] = []
+    for ea in eas:
+        last_seen_at = _aware(ea.last_seen_at)
+        status_text = ea.status
+        if last_seen_at is None or now - last_seen_at > timeout_window:
+            status_text = "offline"
+        latest_command = latest_commands.get(ea.ea_id)
+        active_count = active_command_counts.get(ea.ea_id, 0)
+        risk_level = "normal"
+        risk_text = "normal"
+        if status_text == "offline":
+            risk_level = "high"
+            risk_text = "ea_offline"
+        elif latest_command and latest_command.status in {CommandStatus.failed, CommandStatus.timeout}:
+            risk_level = "high"
+            risk_text = "recent_command_issue"
+        elif active_count:
+            risk_level = "watch"
+            risk_text = "command_in_progress"
+        elif not ea.allow_trading:
+            risk_level = "paused"
+            risk_text = "trading_paused"
+
+        assignment = assignments_by_ea.get(ea.ea_id)
+        can_trade = principal.role == UserRole.admin.value or bool(assignment and assignment.can_trade)
+        is_primary = principal.role == UserRole.admin.value or bool(assignment and assignment.is_primary_operator)
+        rows.append(
+            {
+                "ea_id": ea.ea_id,
+                "account_number": ea.account_number,
+                "broker": ea.broker,
+                "status": status_text,
+                "allow_trading": ea.allow_trading,
+                "can_trade": can_trade,
+                "is_primary_operator": is_primary,
+                "positions_count": position_counts.get(ea.ea_id, 0),
+                "pending_orders_count": pending_order_counts.get(ea.ea_id, 0),
+                "active_commands_count": active_count,
+                "latest_command_status": latest_command.status if latest_command else None,
+                "latest_command_type": latest_command.command_type if latest_command else None,
+                "latest_command_at": latest_command.updated_at if latest_command else None,
+                "last_seen_at": ea.last_seen_at,
+                "latest_snapshot_at": latest_snapshot_times.get(ea.ea_id),
+                "risk_level": risk_level,
+                "risk_text": risk_text,
+            }
+        )
+
+    risk_order = {"high": 0, "watch": 1, "paused": 2, "normal": 3}
+    rows.sort(key=lambda row: (risk_order.get(row["risk_level"], 9), row["ea_id"]))
+    alert_summary = _build_production_alerts(db, principal)
+    return {
+        "generated_at": now,
+        "username": principal.subject,
+        "role": principal.role,
+        "total_eas": len(rows),
+        "tradeable_eas": sum(1 for row in rows if row["can_trade"]),
+        "offline_eas": sum(1 for row in rows if row["status"] == "offline"),
+        "active_commands": sum(row["active_commands_count"] for row in rows),
+        "open_positions": sum(row["positions_count"] for row in rows),
+        "pending_orders": sum(row["pending_orders_count"] for row in rows),
+        "alerts": alert_summary["alerts"][:10],
+        "eas": rows,
+    }
+
+
+@router.get("/reports/operations", response_model=OperationsReportOut)
+def operations_report(
+    days: int = Query(7, ge=1, le=90),
+    db: Session = Depends(get_db),
+    principal: AdminPrincipal = Depends(require_console_access),
+) -> dict:
+    require_admin_principal(principal)
+    window_end = utc_now()
+    window_start = window_end - timedelta(days=days)
+    commands = list(
+        db.scalars(
+            select(Command)
+            .where(Command.created_at >= window_start, Command.created_at <= window_end)
+            .order_by(desc(Command.created_at))
+        )
+    )
+    audits = list(
+        db.scalars(
+            select(AuditLog)
+            .where(AuditLog.created_at >= window_start, AuditLog.created_at <= window_end)
+            .order_by(desc(AuditLog.created_at))
+        )
+    )
+    eas_by_id = {ea.ea_id: ea for ea in db.scalars(select(EAInstance))}
+
+    by_status: dict[str, int] = {}
+    by_type: dict[str, int] = {}
+    by_operator: dict[str, int] = {}
+    by_ea: dict[str, dict] = {}
+    manual_commands = 0
+    active_statuses = {CommandStatus.pending, CommandStatus.received, CommandStatus.executing}
+
+    for command in commands:
+        status_key = command.status.value
+        type_key = command.command_type.value
+        operator_key = command.requested_by or "-"
+        by_status[status_key] = by_status.get(status_key, 0) + 1
+        by_type[type_key] = by_type.get(type_key, 0) + 1
+        by_operator[operator_key] = by_operator.get(operator_key, 0) + 1
+        if command.payload and (
+            command.payload.get("manual_trade")
+            or command.payload.get("manual_manage")
+            or command.payload.get("manual_release")
+            or command.payload.get("source") in {"manual-trades-ui", "ea-detail-ui"}
+        ):
+            manual_commands += 1
+        row = by_ea.setdefault(
+            command.ea_id,
+            {
+                "ea_id": command.ea_id,
+                "commands_count": 0,
+                "failed_count": 0,
+                "timeout_count": 0,
+                "manual_count": 0,
+                "latest_command_at": None,
+            },
+        )
+        row["commands_count"] += 1
+        if command.status == CommandStatus.failed:
+            row["failed_count"] += 1
+        if command.status == CommandStatus.timeout:
+            row["timeout_count"] += 1
+        if command.payload and (
+            command.payload.get("manual_trade")
+            or command.payload.get("manual_manage")
+            or command.payload.get("manual_release")
+            or command.payload.get("source") in {"manual-trades-ui", "ea-detail-ui"}
+        ):
+            row["manual_count"] += 1
+        if row["latest_command_at"] is None or command.created_at > row["latest_command_at"]:
+            row["latest_command_at"] = command.created_at
+
+    top_eas = []
+    for ea_id, row in by_ea.items():
+        ea = eas_by_id.get(ea_id)
+        top_eas.append(
+            {
+                **row,
+                "account_number": ea.account_number if ea else None,
+                "broker": ea.broker if ea else None,
+            }
+        )
+    top_eas.sort(key=lambda row: (row["failed_count"] + row["timeout_count"], row["commands_count"]), reverse=True)
+
+    archive_events = [audit for audit in audits if audit.action in {"ea.archived", "ea.restored"}]
+    return {
+        "generated_at": window_end,
+        "window_start": window_start,
+        "window_end": window_end,
+        "days": days,
+        "commands_total": len(commands),
+        "commands_success": sum(1 for command in commands if command.status == CommandStatus.success),
+        "commands_failed": sum(1 for command in commands if command.status == CommandStatus.failed),
+        "commands_timeout": sum(1 for command in commands if command.status == CommandStatus.timeout),
+        "commands_active": sum(1 for command in commands if command.status in active_statuses),
+        "manual_commands": manual_commands,
+        "archived_events": sum(1 for audit in archive_events if audit.action == "ea.archived"),
+        "restored_events": sum(1 for audit in archive_events if audit.action == "ea.restored"),
+        "by_status": [{"key": key, "count": count} for key, count in sorted(by_status.items())],
+        "by_type": [{"key": key, "count": count} for key, count in sorted(by_type.items(), key=lambda item: item[1], reverse=True)],
+        "by_operator": [{"key": key, "count": count} for key, count in sorted(by_operator.items(), key=lambda item: item[1], reverse=True)],
+        "top_eas": top_eas[:10],
+        "archive_events": archive_events[:20],
+    }
+
+
 @router.get("/dashboard/eas", response_model=list[EADashboardCardOut])
 def dashboard_eas(
     demo: int | None = Query(None, ge=1, le=120),
@@ -387,7 +836,7 @@ def dashboard_eas(
     eas = list(
         db.scalars(
             select(EAInstance)
-            .where(EAInstance.ea_id.in_(visible_ea_ids_stmt(principal)))
+            .where(EAInstance.ea_id.in_(visible_ea_ids_stmt(principal)), EAInstance.lifecycle_status != EALifecycleStatus.archived)
             .order_by(desc(EAInstance.last_seen_at))
         )
     )
@@ -459,7 +908,11 @@ def dashboard_eas(
             "strategy_name": ea.strategy_name,
             "version": ea.version,
             "status": status,
+            "lifecycle_status": ea.lifecycle_status,
             "allow_trading": ea.allow_trading,
+            "archived_at": ea.archived_at,
+            "archived_by": ea.archived_by,
+            "archive_reason": ea.archive_reason,
             "last_seen_at": ea.last_seen_at,
             "updated_at": ea.updated_at,
             "positions_count": position_counts.get(ea.ea_id, 0),
@@ -568,7 +1021,11 @@ def list_eas(
                 "strategy_name": ea.strategy_name,
                 "version": ea.version,
                 "status": status,
+                "lifecycle_status": ea.lifecycle_status,
                 "allow_trading": ea.allow_trading,
+                "archived_at": ea.archived_at,
+                "archived_by": ea.archived_by,
+                "archive_reason": ea.archive_reason,
                 "last_seen_at": ea.last_seen_at,
                 "updated_at": ea.updated_at,
                 "positions_count": position_counts.get(ea.ea_id, 0),
@@ -625,22 +1082,13 @@ def create_or_update_ea(
     )
     db.commit()
     db.refresh(ea)
-    return {
-        "ea_id": ea.ea_id,
-        "account_number": ea.account_number,
-        "broker": ea.broker,
-        "terminal": ea.terminal,
-        "strategy_name": ea.strategy_name,
-        "version": ea.version,
-        "status": ea.status,
-        "allow_trading": ea.allow_trading,
-        "last_seen_at": ea.last_seen_at,
-        "updated_at": ea.updated_at,
-        "assigned_users": [],
-        "has_ea_token": bool(ea.api_token_hash),
-        "risk_level": "normal",
-        "risk_text": "created" if created else "updated",
-    }
+    return ea_out_from_instance(
+        ea,
+        assigned_users=[],
+        has_ea_token=bool(ea.api_token_hash),
+        risk_level="normal",
+        risk_text="created" if created else "updated",
+    )
 
 
 @router.post("/eas/{ea_id}/token", response_model=EATokenOut)
@@ -666,6 +1114,59 @@ def rotate_ea_token(
     )
     db.commit()
     return EATokenOut(ea_id=ea_id, api_token=token, message="EA token generated; copy it now")
+
+
+@router.post("/eas/{ea_id}/archive", response_model=EAOut)
+def archive_ea(
+    ea_id: str,
+    payload: EALifecycleUpdateIn,
+    db: Session = Depends(get_db),
+    principal: AdminPrincipal = Depends(require_console_access),
+) -> dict:
+    require_admin_principal(principal)
+    ea = require_ea_access(db, principal, ea_id)
+    ea.lifecycle_status = EALifecycleStatus.archived
+    ea.allow_trading = False
+    ea.archived_at = utc_now()
+    ea.archived_by = principal.subject
+    ea.archive_reason = (payload.reason or "").strip() or None
+    write_audit_log(
+        db,
+        principal,
+        action="ea.archived",
+        resource_type="ea",
+        resource_id=ea_id,
+        details={"reason": ea.archive_reason},
+    )
+    db.commit()
+    db.refresh(ea)
+    return ea_out_from_instance(ea, assigned_users=assignment_display_users_by_ea(db).get(ea_id, []), has_ea_token=bool(ea.api_token_hash))
+
+
+@router.post("/eas/{ea_id}/restore", response_model=EAOut)
+def restore_ea(
+    ea_id: str,
+    payload: EALifecycleUpdateIn,
+    db: Session = Depends(get_db),
+    principal: AdminPrincipal = Depends(require_console_access),
+) -> dict:
+    require_admin_principal(principal)
+    ea = require_ea_access(db, principal, ea_id)
+    ea.lifecycle_status = EALifecycleStatus.active
+    ea.archived_at = None
+    ea.archived_by = None
+    ea.archive_reason = None
+    write_audit_log(
+        db,
+        principal,
+        action="ea.restored",
+        resource_type="ea",
+        resource_id=ea_id,
+        details={"reason": (payload.reason or "").strip() or None},
+    )
+    db.commit()
+    db.refresh(ea)
+    return ea_out_from_instance(ea, assigned_users=assignment_display_users_by_ea(db).get(ea_id, []), has_ea_token=bool(ea.api_token_hash))
 
 
 @router.get("/users", response_model=list[UserOut])
@@ -1168,7 +1669,8 @@ def create_command(
     db: Session = Depends(get_db),
     principal: AdminPrincipal = Depends(require_console_access),
 ) -> Command:
-    require_ea_access(db, principal, payload.ea_id, trade=True)
+    ea = require_ea_access(db, principal, payload.ea_id, trade=True)
+    require_ea_accepts_trading_commands(ea)
     validated_payload = validate_command_payload(payload)
     ensure_no_active_locked_command(db, payload.ea_id, payload.command_type)
 
