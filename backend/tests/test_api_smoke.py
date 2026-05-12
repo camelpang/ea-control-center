@@ -1076,6 +1076,7 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "自动判断 Limit / Stop" in r.text
     assert "当前价参考" in r.text
     assert "inferPendingOrderType" in r.text
+    assert "fallbackPendingOrderType" in r.text
     assert "reference_price" in r.text
     assert "已无当前订单" in r.text
     assert "current_order_count" in r.text

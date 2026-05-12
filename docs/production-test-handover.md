@@ -187,4 +187,4 @@ Fix:
 Operational note:
 
 - For automatic pending-order type inference, select an EA with a fresh snapshot first.
-- If no current price is available, choose Buy/Sell Limit/Stop manually.
+- If no current price is available, automatic mode falls back to `buy_limit` or `sell_limit` based on direction; operators can still choose Limit/Stop manually.

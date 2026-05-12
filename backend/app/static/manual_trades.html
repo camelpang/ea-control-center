@@ -1237,6 +1237,9 @@
       if (side === "sell") return price > referencePrice ? "sell_limit" : "sell_stop";
       return "";
     }
+    function fallbackPendingOrderType(side) {
+      return side === "sell" ? "sell_limit" : "buy_limit";
+    }
     function orderTypeText(type) {
       const map = {
         auto: "自动判断 Limit / Stop",
@@ -1272,7 +1275,7 @@
         return;
       }
       if (referencePrice === null) {
-        pendingTypeHintEl.textContent = "当前价缺失，自动判断不可用，请手动选择挂单类型。";
+        pendingTypeHintEl.textContent = `当前价缺失，自动判断会临时按方向使用 ${orderTypeText(fallbackPendingOrderType(side))}；也可手动选择 Limit/Stop。`;
         return;
       }
       const inferred = inferPendingOrderType(side, price, referencePrice);
@@ -1353,7 +1356,7 @@
         if (orderType === "auto") {
           const referencePrice = rowReferencePrice(row, side);
           orderType = inferPendingOrderType(side, price, referencePrice);
-          if (!orderType) throw new Error(`${row.ea_id} 缺少当前价，无法自动判断挂单类型，请手动选择 Limit/Stop。`);
+          if (!orderType) orderType = fallbackPendingOrderType(side);
         }
         payload.order_mode = "pending";
         payload.pending_order = true;
