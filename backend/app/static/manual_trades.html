@@ -241,6 +241,7 @@
     .badge.market { background: rgba(56, 189, 248, 0.18); color: #7dd3fc; }
     .badge.pending { background: rgba(234, 179, 8, 0.18); color: #fde047; }
     .badge.managed { background: rgba(168, 85, 247, 0.18); color: #d8b4fe; }
+    .badge.position { background: rgba(20, 184, 166, 0.18); color: #5eead4; }
     .badge.active { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
     .badge.restored { background: rgba(34, 197, 94, 0.18); color: #86efac; }
     .badge.progress { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
@@ -723,7 +724,9 @@
       const payload = payloadOf(manualCommand);
       const cls = manualCommand
         ? classifyTrade(manualCommand, eaCommands)
-        : { state: "normal", stateText: "全局筛选", tradeType: "managed" };
+        : (ea.positions_count > 0
+          ? { state: "active", stateText: "持仓中", tradeType: "position" }
+          : { state: "normal", stateText: "全局筛选", tradeType: "managed" });
       const latestCommand = eaCommands[0] || {};
       return {
         ea_id: ea.ea_id,
@@ -752,7 +755,7 @@
         tradeType: cls.tradeType,
         tradeTypeText: manualCommand
           ? (cls.tradeType === "pending" ? "挂单建仓" : (cls.tradeType === "managed" ? "人工管理" : "手动市价建仓"))
-          : "全局 EA",
+          : (cls.tradeType === "position" ? "当前持仓" : "全局 EA"),
       };
     }
     function buildRows(eas, commands) {
@@ -778,12 +781,16 @@
       for (const [eaId, eaCommands] of byEa.entries()) {
         eaCommands.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         const manualCommand = eaCommands.find(isManualOpenCommand);
-        if (!manualCommand) continue;
-        if (manualCommand.command_type === "manual_release") continue;
         const ea = eaMap.get(eaId) || {};
+        if (!manualCommand && !(ea.positions_count > 0)) continue;
+        if (manualCommand?.command_type === "manual_release") continue;
         result.push(rowFromEa({ ...ea, ea_id: eaId }, eaCommands, manualCommand));
       }
-      return result.sort((a, b) => new Date(b.manual_command.created_at) - new Date(a.manual_command.created_at));
+      return result.sort((a, b) => {
+        const aTime = a.manual_command ? new Date(a.manual_command.created_at).getTime() : new Date(a.last_seen_at || 0).getTime();
+        const bTime = b.manual_command ? new Date(b.manual_command.created_at).getTime() : new Date(b.last_seen_at || 0).getTime();
+        return bTime - aTime;
+      });
     }
     function matchingPositionForRow(row, positions) {
       if (!Array.isArray(positions) || !positions.length) return null;
@@ -821,6 +828,7 @@
           const match = matchingPositionForRow(row, positions);
           row.symbol = match?.symbol || row.symbol;
           row.side = match?.side || row.side;
+          row.volume = match?.volume ?? row.volume;
         }
       }
     }

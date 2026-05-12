@@ -55,3 +55,15 @@ Fix:
 - Added an online/offline/unknown status badge to every manual trades card.
 - Added `3 秒` to the auto-refresh dropdown.
 - The page now loads current positions from `/api/admin/eas/{ea_id}/positions` and uses the matched position `ticket` to fill the card order number and the default close-by-ticket value.
+
+## 2026-05-12 Public Manual Management Visibility
+
+Observed during public-IP testing:
+
+- The public server showed the EA as online with an open position on the dashboard.
+- The manual trades page did not show it when there was no matching manual/open command history on that server database.
+
+Fix:
+
+- The manual trades page now also includes EAs that currently have open positions, even if they do not yet have a manual-management command record.
+- These rows are labeled as `当前持仓` / `持仓中` and can be selected for unified close/manual-management actions.
