@@ -718,6 +718,8 @@ def test_dashboard_html_route(client: TestClient) -> None:
     assert "loadPermissionContext" in r.text
     assert "canTradeEa" in r.text
     assert "permissionTextForEa" in r.text
+    assert "assignmentTextForEa" in r.text
+    assert "归属分配" in r.text
     assert "/api/admin/my-assignments" in r.text
     assert "confirmModal" in r.text
     assert "openConfirmDialog" in r.text
@@ -918,6 +920,8 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "loadPermissionContext" in r.text
     assert "canTradeRow" in r.text
     assert "permissionTextForRow" in r.text
+    assert "assignmentTextForRow" in r.text
+    assert "归属分配" in r.text
     assert "/api/admin/my-assignments" in r.text
     assert '<option value="3000">3 秒</option>' in r.text
     assert "onlineStatusText" in r.text

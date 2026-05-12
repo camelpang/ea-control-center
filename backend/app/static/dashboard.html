@@ -532,6 +532,11 @@
       return assignment.is_primary_operator ? "权限：主操作者 / 只读" : "权限：只读";
     }
 
+    function assignmentTextForEa(ea) {
+      const users = Array.isArray(ea.assigned_users) ? ea.assigned_users.filter(Boolean) : [];
+      return users.length ? users.join("、") : "未分配";
+    }
+
     function fmtNum(v) {
       if (v === null || v === undefined || v === "") return "—";
       const n = Number(v);
@@ -895,6 +900,8 @@
               <dd>${escapeHtml(String(ea.account_number ?? "—"))} · ${escapeHtml((ea.broker || "—").slice(0, 18))}</dd>
               <dt>终端</dt>
               <dd>${escapeHtml(ea.terminal || "—")} ${ea.allow_trading === false ? "· <span class='profit-neg'>已暂停</span>" : ""}</dd>
+              <dt>归属分配</dt>
+              <dd title="${escapeHtml(assignmentTextForEa(ea))}">${escapeHtml(assignmentTextForEa(ea))}</dd>
               <dt>持仓数</dt>
               <dd>${escapeHtml(String(ea.positions_count ?? 0))}</dd>
               <dt>余额</dt>

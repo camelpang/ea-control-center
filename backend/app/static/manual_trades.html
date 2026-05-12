@@ -629,6 +629,10 @@
       if (assignment.can_trade) return assignment.is_primary_operator ? "权限：主操作者 / 可交易" : "权限：可交易";
       return assignment.is_primary_operator ? "权限：主操作者 / 只读" : "权限：只读";
     }
+    function assignmentTextForRow(row) {
+      const users = Array.isArray(row.assigned_users) ? row.assigned_users.filter(Boolean) : [];
+      return users.length ? users.join("、") : "未分配";
+    }
     function fmtDate(s) {
       if (!s) return "-";
       const d = new Date(s);
@@ -737,6 +741,7 @@
         allow_trading: ea.allow_trading,
         risk_level: ea.risk_level,
         risk_text: ea.risk_text,
+        assigned_users: ea.assigned_users || [],
         positions_count: ea.positions_count,
         equity: ea.equity,
         snapshot_profit: ea.snapshot_profit,
@@ -942,6 +947,7 @@
               <dt>品种 / 方向</dt><dd>${escapeHtml(row.symbol || "-")} / ${escapeHtml(row.side || "-")}</dd>
               <dt>手数</dt><dd>${escapeHtml(row.volume ?? "-")}</dd>
               <dt>订单号</dt><dd title="${escapeHtml(ticketsFromPositions(row.positions).join(", ") || row.ticket || "")}">${escapeHtml(row.ticket || "-")}</dd>
+              <dt>归属分配</dt><dd title="${escapeHtml(assignmentTextForRow(row))}">${escapeHtml(assignmentTextForRow(row))}</dd>
               <dt>净值 / 浮盈亏</dt><dd>${fmtNum(row.equity)} / ${fmtNum(row.snapshot_profit)}</dd>
               <dt>持仓数</dt><dd>${escapeHtml(row.positions_count ?? 0)}</dd>
               <dt>人工命令</dt><dd>${row.manual_command ? `#${escapeHtml(row.manual_command.id)} · ${escapeHtml(row.manual_command.status)}` : "无"}</dd>

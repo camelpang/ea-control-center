@@ -67,3 +67,14 @@ Fix:
 
 - The manual trades page now also includes EAs that currently have open positions, even if they do not yet have a manual-management command record.
 - These rows are labeled as `当前持仓` / `持仓中` and can be selected for unified close/manual-management actions.
+
+## 2026-05-12 EA Card Assignment Visibility
+
+Observed during public-IP testing:
+
+- Operators had to switch back to the EA account list to check which user owns or is assigned to an EA.
+
+Fix:
+
+- Dashboard EA cards now show `归属分配` from the existing `assigned_users` API field.
+- Manual trades EA cards also show the same assignment summary, so operators can confirm ownership before sending close/manual commands.
