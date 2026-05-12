@@ -19,7 +19,7 @@ def mark_timed_out_commands(db: Session) -> None:
         db.scalars(
             select(Command).where(
                 and_(
-                    Command.status.in_([CommandStatus.pending, CommandStatus.received]),
+                    Command.status.in_([CommandStatus.pending, CommandStatus.received, CommandStatus.executing]),
                     Command.expires_at.is_not(None),
                     Command.expires_at <= now,
                 )

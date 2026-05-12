@@ -577,6 +577,71 @@ def test_timed_out_command_creates_audit_log(client: TestClient) -> None:
     assert timeout_logs[0]["details"]["ea_id"] == ea_id
 
 
+def test_executing_command_can_timeout_and_unlock_next_trade(client: TestClient) -> None:
+    ea_id = "pytest-executing-timeout-001"
+    assert (
+        client.post(
+            "/api/ea/heartbeat",
+            headers={"X-EA-Token": "test_ea_token"},
+            json={"ea_id": ea_id, "terminal": "MT5", "status": "online"},
+        ).status_code
+        == 200
+    )
+
+    created = client.post(
+        "/api/admin/commands",
+        headers={"X-Admin-Token": "test_admin_token"},
+        json={
+            "ea_id": ea_id,
+            "command_type": "open_order",
+            "payload": {"symbol": "XAUUSD", "side": "buy", "volume": 0.1, "source": "pytest"},
+            "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat(),
+        },
+    )
+    assert created.status_code == 201
+    command_id = created.json()["id"]
+
+    fetched = client.get(
+        f"/api/ea/commands?ea_id={ea_id}",
+        headers={"X-EA-Token": "test_ea_token"},
+    )
+    assert fetched.status_code == 200
+    assert fetched.json()[0]["id"] == command_id
+
+    executing = client.post(
+        f"/api/ea/commands/{command_id}/result",
+        headers={"X-EA-Token": "test_ea_token"},
+        json={"status": "executing", "message": "command started", "raw": {"source": "pytest"}},
+    )
+    assert executing.status_code == 200
+    assert executing.json()["status"] == "executing"
+
+    from app.database import SessionLocal
+    from app.models import Command
+
+    with SessionLocal() as db:
+        command = db.get(Command, command_id)
+        assert command is not None
+        command.expires_at = datetime.now(timezone.utc) - timedelta(seconds=5)
+        db.commit()
+
+    rows = client.get("/api/admin/commands", headers={"X-Admin-Token": "test_admin_token"})
+    assert rows.status_code == 200
+    command = next(row for row in rows.json() if row["id"] == command_id)
+    assert command["status"] == "timeout"
+
+    next_trade = client.post(
+        "/api/admin/commands",
+        headers={"X-Admin-Token": "test_admin_token"},
+        json={
+            "ea_id": ea_id,
+            "command_type": "close_all",
+            "payload": {"source": "pytest"},
+        },
+    )
+    assert next_trade.status_code == 201
+
+
 def test_manual_manage_command_type_accepted(client: TestClient) -> None:
     ea_id = "pytest-manual-manage-001"
     assert (
