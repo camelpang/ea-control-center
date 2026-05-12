@@ -1075,6 +1075,9 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "data-pending-order-select" in r.text
     assert "自动判断 Limit / Stop" in r.text
     assert "当前价参考" in r.text
+    assert "下一步：预览并确认发送" in r.text
+    assert "operationMsg" in r.text
+    assert "确认发送命令" in r.text
     assert "inferPendingOrderType" in r.text
     assert "fallbackPendingOrderType" in r.text
     assert "reference_price" in r.text

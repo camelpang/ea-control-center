@@ -523,8 +523,9 @@
             <input id="opSnapshot" class="input" type="number" min="1" step="1" placeholder="快照间隔秒" />
             <input id="opPoll" class="input" type="number" min="1" step="1" placeholder="命令轮询秒" />
           </div>
-          <button id="sendBulkBtn" class="button danger" type="button">发送到已选 EA</button>
+          <button id="sendBulkBtn" class="button danger" type="button">下一步：预览并确认发送</button>
           <button id="removeManualBtn" class="button" type="button">移出人工管理页面</button>
+          <div id="operationMsg" class="message"></div>
         </div>
         <div class="toolbar vertical" style="margin-top: 12px;">
           <span id="selectedOrdersCount" class="meta">已选择 0 个持仓 / 0 个挂单</span>
@@ -567,6 +568,7 @@
   <script>
     const grid = document.getElementById("grid");
     const msg = document.getElementById("msg");
+    const operationMsg = document.getElementById("operationMsg");
     const adminTokenEl = document.getElementById("adminToken");
     const statusFilterEl = document.getElementById("statusFilter");
     const searchBoxEl = document.getElementById("searchBox");
@@ -636,10 +638,18 @@
     function showMsg(text, type = "err") {
       msg.textContent = text;
       msg.className = "message show " + type;
+      if (operationMsg) {
+        operationMsg.textContent = text;
+        operationMsg.className = "message show " + type;
+      }
     }
     function clearMsg() {
       msg.className = "message";
       msg.textContent = "";
+      if (operationMsg) {
+        operationMsg.className = "message";
+        operationMsg.textContent = "";
+      }
     }
     function apiErrorMessage(text, statusCode) {
       if (!text) return `请求失败：${statusCode}`;
@@ -1426,6 +1436,7 @@
           }))
         : [];
       const warnings = [];
+      warnings.push("请在本弹窗底部点击“确认发送”，命令才会真正写入后台并由 EA 领取。");
       if (isRiskyOperation(operation)) {
         warnings.push("该操作会影响持仓、开仓或挂单，请确认目标 EA 和关键参数。");
       }
@@ -1473,6 +1484,8 @@
 
       confirmModal.classList.add("show");
       confirmModal.setAttribute("aria-hidden", "false");
+      showMsg("请在确认弹窗中检查参数，然后点击“确认发送”。", "warn");
+      confirmSendBtn.textContent = "确认发送命令";
       confirmSendBtn.focus();
       return new Promise((resolve) => {
         pendingConfirmResolve = resolve;
