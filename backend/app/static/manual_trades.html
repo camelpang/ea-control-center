@@ -1306,6 +1306,8 @@
     }
     function payloadForRow(row, operation, reason) {
       const payload = {};
+      const symbol = opText("opSymbol") || row.symbol;
+      const side = opText("opSide") || "buy";
       if (reason) payload.reason = reason;
       if (operation === "manual_manage") {
         payload.manual_trade = true;
@@ -1318,7 +1320,6 @@
         payload.source = "manual-trades-ui";
       }
       if (operation === "close_symbol") {
-        const symbol = opText("opSymbol") || row.symbol;
         if (!symbol) throw new Error(`${row.ea_id} 缺少品种，无法按品种平仓。`);
         payload.symbol = symbol;
       }
@@ -1335,8 +1336,6 @@
         }
       }
       if (operation === "open_market" || operation === "open_pending") {
-        const symbol = opText("opSymbol");
-        const side = opText("opSide") || "buy";
         const volume = opNumber("opVolume");
         if (!symbol) throw new Error("请填写交易品种。");
         if (!Number.isFinite(volume) || volume <= 0) throw new Error("建仓手数必须大于 0。");

@@ -1080,6 +1080,7 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "确认发送命令" in r.text
     assert "inferPendingOrderType" in r.text
     assert "fallbackPendingOrderType" in r.text
+    assert "const side = opText(\"opSide\") || \"buy\";" in r.text
     assert "reference_price" in r.text
     assert "已无当前订单" in r.text
     assert "current_order_count" in r.text
