@@ -144,3 +144,23 @@ Operational note:
 
 - After manual MT5-side close/cancel, wait for the next EA snapshot interval or click refresh after the next snapshot is accepted.
 - If the row still shows current orders, confirm the MT5 journal prints `Snapshot accepted positions=0 pending_orders=0`.
+
+## 2026-05-12 Order-Level Batch Actions
+
+Observed during production testing:
+
+- Operators can see multiple positions and pending orders on one EA card.
+- One-by-one close/cancel buttons are useful, but high-volume manual handling needs selected-order batch actions.
+
+Fix:
+
+- Current position rows now have checkboxes for order-level selection.
+- Current pending-order rows now have checkboxes for order-level selection.
+- The right-side operation panel includes `批量平选中持仓` and `批量取消选中挂单`.
+- Batch actions group selected tickets by EA and submit one command per EA with `payload.tickets`.
+- The MT5 connector supports `tickets` arrays for both `close_ticket` and `cancel_order`, processing multiple broker tickets within one EA command.
+
+Operational note:
+
+- Batch selected-order actions are safer than `close_all` when only some positions or pending orders should be handled.
+- The confirmation dialog shows the grouped ticket list before commands are sent.

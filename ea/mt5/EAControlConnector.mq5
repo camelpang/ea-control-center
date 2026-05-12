@@ -266,6 +266,55 @@ bool ExtractJsonObjectAt(string text, int start_brace, string &object_text, int 
    return false;
 }
 
+bool ExtractJsonArrayAt(string text, int start_bracket, string &array_text, int &next_pos)
+{
+   if(start_bracket < 0 || start_bracket >= StringLen(text))
+      return false;
+   if((ushort)StringGetCharacter(text, start_bracket) != '[')
+      return false;
+
+   bool in_string = false;
+   bool escaped = false;
+   int depth = 0;
+   int len = StringLen(text);
+
+   for(int i = start_bracket; i < len; i++)
+   {
+      ushort ch = (ushort)StringGetCharacter(text, i);
+      if(in_string)
+      {
+         if(escaped)
+            escaped = false;
+         else if(ch == '\\')
+            escaped = true;
+         else if(ch == '"')
+            in_string = false;
+         continue;
+      }
+
+      if(ch == '"')
+      {
+         in_string = true;
+         continue;
+      }
+
+      if(ch == '[')
+         depth++;
+      else if(ch == ']')
+      {
+         depth--;
+         if(depth == 0)
+         {
+            array_text = StringSubstr(text, start_bracket, i - start_bracket + 1);
+            next_pos = i + 1;
+            return true;
+         }
+      }
+   }
+
+   return false;
+}
+
 bool JsonGetString(string json, string key, string &value)
 {
    string marker = "\"" + key + "\":\"";
@@ -288,6 +337,18 @@ bool JsonGetObject(string json, string key, string &value)
    int brace_pos = SkipWhitespace(json, pos + StringLen(marker));
    int next_pos = 0;
    return ExtractJsonObjectAt(json, brace_pos, value, next_pos);
+}
+
+bool JsonGetArray(string json, string key, string &value)
+{
+   string marker = "\"" + key + "\":";
+   int pos = StringFind(json, marker);
+   if(pos < 0)
+      return false;
+
+   int bracket_pos = SkipWhitespace(json, pos + StringLen(marker));
+   int next_pos = 0;
+   return ExtractJsonArrayAt(json, bracket_pos, value, next_pos);
 }
 
 bool JsonGetNumberText(string json, string key, string &value)
@@ -684,6 +745,77 @@ bool CancelPendingOrderByTicketText(string ticket_text, string &message)
    return true;
 }
 
+bool ExtractNextArrayString(string array_json, int &offset, string &value)
+{
+   int pos = StringFind(array_json, "\"", offset);
+   if(pos < 0)
+      return false;
+   int next_pos = 0;
+   if(!ExtractJsonStringAt(array_json, pos, value, next_pos))
+      return false;
+   offset = next_pos;
+   return true;
+}
+
+bool ClosePositionsByTicketList(string payload_json, string &message)
+{
+   string tickets_json = "";
+   if(!JsonGetArray(payload_json, "tickets", tickets_json))
+   {
+      string ticket = "";
+      if(JsonGetString(payload_json, "ticket", ticket) || JsonGetNumberText(payload_json, "ticket", ticket))
+         return ClosePositionByTicketText(ticket, message);
+      message = "missing ticket";
+      return false;
+   }
+
+   int closed = 0;
+   int failed = 0;
+   int offset = 0;
+   string ticket = "";
+   while(ExtractNextArrayString(tickets_json, offset, ticket))
+   {
+      string item_message = "";
+      if(ClosePositionByTicketText(ticket, item_message))
+         closed++;
+      else
+         failed++;
+   }
+
+   message = "closed=" + IntegerToString(closed) + ", failed=" + IntegerToString(failed);
+   return closed > 0 && failed == 0;
+}
+
+bool CancelPendingOrdersByTicketList(string payload_json, string &message)
+{
+   string tickets_json = "";
+   if(!JsonGetArray(payload_json, "tickets", tickets_json))
+   {
+      string ticket = "";
+      if(JsonGetString(payload_json, "ticket", ticket) || JsonGetNumberText(payload_json, "ticket", ticket)
+         || JsonGetString(payload_json, "order_ticket", ticket) || JsonGetNumberText(payload_json, "order_ticket", ticket))
+         return CancelPendingOrderByTicketText(ticket, message);
+      message = "missing order ticket";
+      return false;
+   }
+
+   int cancelled = 0;
+   int failed = 0;
+   int offset = 0;
+   string ticket = "";
+   while(ExtractNextArrayString(tickets_json, offset, ticket))
+   {
+      string item_message = "";
+      if(CancelPendingOrderByTicketText(ticket, item_message))
+         cancelled++;
+      else
+         failed++;
+   }
+
+   message = "cancelled=" + IntegerToString(cancelled) + ", failed=" + IntegerToString(failed);
+   return cancelled > 0 && failed == 0;
+}
+
 bool CloseAllPositions(string &message)
 {
    bool ok = true;
@@ -1037,20 +1169,11 @@ void ExecuteCommand(int command_id, string command_type, string payload_json)
    }
    else if(command_type == "close_ticket")
    {
-      string ticket = "";
-      if(JsonGetString(payload_json, "ticket", ticket) || JsonGetNumberText(payload_json, "ticket", ticket))
-         success = ClosePositionByTicketText(ticket, message);
-      else
-         message = "missing ticket";
+      success = ClosePositionsByTicketList(payload_json, message);
    }
    else if(command_type == "cancel_order")
    {
-      string ticket = "";
-      if(JsonGetString(payload_json, "ticket", ticket) || JsonGetNumberText(payload_json, "ticket", ticket)
-         || JsonGetString(payload_json, "order_ticket", ticket) || JsonGetNumberText(payload_json, "order_ticket", ticket))
-         success = CancelPendingOrderByTicketText(ticket, message);
-      else
-         message = "missing order ticket";
+      success = CancelPendingOrdersByTicketList(payload_json, message);
    }
    else if(command_type == "manual_manage")
    {

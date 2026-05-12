@@ -288,6 +288,12 @@
       margin-bottom: 8px;
       font-size: 13px;
     }
+    .order-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
     .order-meta {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -517,6 +523,12 @@
           <button id="sendBulkBtn" class="button danger" type="button">发送到已选 EA</button>
           <button id="removeManualBtn" class="button" type="button">移出人工管理页面</button>
         </div>
+        <div class="toolbar vertical" style="margin-top: 12px;">
+          <span id="selectedOrdersCount" class="meta">已选择 0 个持仓 / 0 个挂单</span>
+          <button id="closeSelectedPositionsBtn" class="button danger" type="button">批量平选中持仓</button>
+          <button id="cancelSelectedOrdersBtn" class="button danger" type="button">批量取消选中挂单</button>
+          <button id="clearOrderSelectionBtn" class="button" type="button">清空订单选择</button>
+        </div>
         <div class="meta" style="margin-top: 10px; line-height: 1.55;">所有命令都从右侧统一下发；品种/订单号留空时优先使用所选卡片记录；市价建仓和挂单建仓会进入人工管理分类。</div>
       </aside>
     </div>
@@ -558,9 +570,13 @@
     const refreshIntervalEl = document.getElementById("refreshInterval");
     const selectAllVisibleEl = document.getElementById("selectAllVisible");
     const selectedCountEl = document.getElementById("selectedCount");
+    const selectedOrdersCountEl = document.getElementById("selectedOrdersCount");
     const bulkCommandTypeEl = document.getElementById("bulkCommandType");
     const sendBulkBtn = document.getElementById("sendBulkBtn");
     const removeManualBtn = document.getElementById("removeManualBtn");
+    const closeSelectedPositionsBtn = document.getElementById("closeSelectedPositionsBtn");
+    const cancelSelectedOrdersBtn = document.getElementById("cancelSelectedOrdersBtn");
+    const clearOrderSelectionBtn = document.getElementById("clearOrderSelectionBtn");
     const urlFilterBanner = document.getElementById("urlFilterBanner");
     const summaryFilterBanner = document.getElementById("summaryFilterBanner");
     const summaryFilterText = document.getElementById("summaryFilterText");
@@ -576,6 +592,8 @@
     const confirmSendBtn = document.getElementById("confirmSendBtn");
     let rows = [];
     const selectedEaIds = new Set();
+    const selectedPositionKeys = new Set();
+    const selectedPendingOrderKeys = new Set();
     let principal = null;
     let myAssignments = [];
     let timer = null;
@@ -893,13 +911,19 @@
     function ticketsFromOrders(orders) {
       return (orders || []).map((order) => order.ticket).filter(Boolean);
     }
+    function orderSelectionKey(eaId, ticket) {
+      return `${eaId}::${ticket}`;
+    }
     function renderPositions(row) {
       const positions = Array.isArray(row.positions) ? row.positions : [];
       if (!positions.length) return `<div class="meta">暂无当前持仓。</div>`;
       return `<div class="order-list">${positions.map((position) => `
         <div class="order-item">
           <div class="order-item-main">
-            <strong>#${escapeHtml(position.ticket)} · ${escapeHtml(position.symbol)} · ${escapeHtml(position.side)}</strong>
+            <label class="order-title">
+              <input class="trade-check" type="checkbox" data-position-select="1" data-ea-id="${escapeHtml(row.ea_id)}" data-ticket="${escapeHtml(position.ticket)}" ${selectedPositionKeys.has(orderSelectionKey(row.ea_id, position.ticket)) ? "checked" : ""} ${canTradeRow(row) ? "" : "disabled"} />
+              <strong>#${escapeHtml(position.ticket)} · ${escapeHtml(position.symbol)} · ${escapeHtml(position.side)}</strong>
+            </label>
             <span class="meta">${escapeHtml(position.volume ?? "-")} 手</span>
           </div>
           <div class="order-meta">
@@ -922,7 +946,10 @@
       return `<div class="order-list">${orders.map((order) => `
         <div class="order-item">
           <div class="order-item-main">
-            <strong>#${escapeHtml(order.ticket)} · ${escapeHtml(order.symbol)} · ${escapeHtml(order.order_type)}</strong>
+            <label class="order-title">
+              <input class="trade-check" type="checkbox" data-pending-order-select="1" data-ea-id="${escapeHtml(row.ea_id)}" data-ticket="${escapeHtml(order.ticket)}" ${selectedPendingOrderKeys.has(orderSelectionKey(row.ea_id, order.ticket)) ? "checked" : ""} ${canTradeRow(row) ? "" : "disabled"} />
+              <strong>#${escapeHtml(order.ticket)} · ${escapeHtml(order.symbol)} · ${escapeHtml(order.order_type)}</strong>
+            </label>
             <span class="meta">${escapeHtml(order.volume ?? "-")} 手</span>
           </div>
           <div class="order-meta">
@@ -1044,15 +1071,47 @@
       const rowMap = new Map(rows.map((row) => [row.ea_id, row]));
       return [...selectedEaIds].map((eaId) => rowMap.get(eaId)).filter((row) => row && canTradeRow(row));
     }
+    function selectedOrderGroups(kind) {
+      const source = kind === "position" ? selectedPositionKeys : selectedPendingOrderKeys;
+      const rowMap = new Map(rows.map((row) => [row.ea_id, row]));
+      const groups = new Map();
+      for (const key of source) {
+        const [eaId, ticket] = key.split("::");
+        const row = rowMap.get(eaId);
+        if (!row || !ticket || !canTradeRow(row)) continue;
+        if (!groups.has(eaId)) groups.set(eaId, { row, tickets: [] });
+        groups.get(eaId).tickets.push(ticket);
+      }
+      return [...groups.values()];
+    }
+    function pruneOrderSelections() {
+      const positionKeys = new Set();
+      const pendingOrderKeys = new Set();
+      for (const row of rows) {
+        if (!canTradeRow(row)) continue;
+        (row.positions || []).forEach((position) => positionKeys.add(orderSelectionKey(row.ea_id, position.ticket)));
+        (row.pending_orders || []).forEach((order) => pendingOrderKeys.add(orderSelectionKey(row.ea_id, order.ticket)));
+      }
+      selectedPositionKeys.forEach((key) => {
+        if (!positionKeys.has(key)) selectedPositionKeys.delete(key);
+      });
+      selectedPendingOrderKeys.forEach((key) => {
+        if (!pendingOrderKeys.has(key)) selectedPendingOrderKeys.delete(key);
+      });
+    }
     function updateSelectionUi() {
       const visible = visibleEaIds();
       const selectedVisible = visible.filter((eaId) => selectedEaIds.has(eaId));
       selectedCountEl.textContent = `已选择 ${selectedEaIds.size} 个 EA`;
+      selectedOrdersCountEl.textContent = `已选择 ${selectedPositionKeys.size} 个持仓 / ${selectedPendingOrderKeys.size} 个挂单`;
       selectAllVisibleEl.checked = visible.length > 0 && selectedVisible.length === visible.length;
       selectAllVisibleEl.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visible.length;
       selectAllVisibleEl.disabled = visible.length === 0;
       sendBulkBtn.disabled = selectedEaIds.size === 0;
       removeManualBtn.disabled = selectedEaIds.size === 0;
+      closeSelectedPositionsBtn.disabled = selectedPositionKeys.size === 0;
+      cancelSelectedOrdersBtn.disabled = selectedPendingOrderKeys.size === 0;
+      clearOrderSelectionBtn.disabled = selectedPositionKeys.size === 0 && selectedPendingOrderKeys.size === 0;
     }
     function render() {
       const bannerText = urlFilterText();
@@ -1122,6 +1181,7 @@
         ]);
         rows = buildRows(eas, commands);
         await enrichRowsWithPositions(rows);
+        pruneOrderSelections();
         selectedEaIds.forEach((eaId) => {
           const row = rows.find((item) => item.ea_id === eaId);
           if (!row || !canTradeRow(row)) selectedEaIds.delete(eaId);
@@ -1247,6 +1307,7 @@
       if (payload.order_type) fields.push(`挂单类型=${payload.order_type}`);
       if (payload.price !== undefined) fields.push(`价格=${payload.price}`);
       if (payload.ticket) fields.push(`ticket=${payload.ticket}`);
+      if (Array.isArray(payload.tickets)) fields.push(`tickets=${payload.tickets.join(",")}`);
       if (payload.max_slippage_points !== undefined) fields.push(`最大滑点=${payload.max_slippage_points}`);
       if (payload.heartbeat_interval_sec !== undefined) fields.push(`心跳=${payload.heartbeat_interval_sec}s`);
       if (payload.snapshot_interval_sec !== undefined) fields.push(`快照=${payload.snapshot_interval_sec}s`);
@@ -1401,6 +1462,45 @@
         showMsg(e.message || String(e), "err");
       }
     }
+    async function sendSelectedOrderBatch(kind) {
+      const groups = selectedOrderGroups(kind);
+      const operation = kind === "position" ? "close_ticket" : "cancel_order";
+      if (!groups.length) {
+        showMsg(kind === "position" ? "请先勾选要平仓的持仓订单。" : "请先勾选要取消的挂单。", "err");
+        return;
+      }
+      const requestedBy = (document.getElementById("bulkRequestedBy").value || "").trim() || "manual-trades-ui";
+      const commands = groups.map((group) => ({
+        ea_id: group.row.ea_id,
+        command_type: operation,
+        payload: {
+          tickets: group.tickets,
+          source: "manual-trades-ui",
+          batch_order_action: true,
+        },
+        requested_by: requestedBy,
+      }));
+      const ok = await openConfirmDialog(buildConfirmPreview(groups.map((group) => group.row), commands, operation, requestedBy));
+      if (!ok) return;
+      try {
+        const results = await Promise.allSettled(commands.map((command) => api("/api/admin/commands", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(command),
+        })));
+        const successCount = results.filter((result) => result.status === "fulfilled").length;
+        const failedCount = results.length - successCount;
+        if (kind === "position") selectedPositionKeys.clear();
+        else selectedPendingOrderKeys.clear();
+        showMsg(
+          failedCount ? `批量命令已发送 ${successCount} 个 EA，失败 ${failedCount} 个。` : `已向 ${successCount} 个 EA 发送“${commandText(operation)}”批量命令。`,
+          failedCount ? "warn" : "ok"
+        );
+        await load();
+      } catch (e) {
+        showMsg(e.message || String(e), "err");
+      }
+    }
     function schedule() {
       if (timer) clearInterval(timer);
       timer = null;
@@ -1443,6 +1543,13 @@
     bulkCommandTypeEl.addEventListener("change", updateOperationFields);
     sendBulkBtn.addEventListener("click", () => sendCommandForRows(selectedRows(), bulkCommandTypeEl.value));
     removeManualBtn.addEventListener("click", () => sendCommandForRows(selectedRows(), "manual_release"));
+    closeSelectedPositionsBtn.addEventListener("click", () => sendSelectedOrderBatch("position"));
+    cancelSelectedOrdersBtn.addEventListener("click", () => sendSelectedOrderBatch("pending"));
+    clearOrderSelectionBtn.addEventListener("click", () => {
+      selectedPositionKeys.clear();
+      selectedPendingOrderKeys.clear();
+      render();
+    });
     confirmCancelBtn.addEventListener("click", () => closeConfirmDialog(false));
     confirmSendBtn.addEventListener("click", () => closeConfirmDialog(true));
     confirmModal.addEventListener("click", (event) => {
@@ -1453,7 +1560,22 @@
     });
     grid.addEventListener("change", (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLInputElement) || !target.dataset.eaSelect) return;
+      if (!(target instanceof HTMLInputElement)) return;
+      if (target.dataset.positionSelect) {
+        const key = orderSelectionKey(target.dataset.eaId || "", target.dataset.ticket || "");
+        if (target.checked) selectedPositionKeys.add(key);
+        else selectedPositionKeys.delete(key);
+        updateSelectionUi();
+        return;
+      }
+      if (target.dataset.pendingOrderSelect) {
+        const key = orderSelectionKey(target.dataset.eaId || "", target.dataset.ticket || "");
+        if (target.checked) selectedPendingOrderKeys.add(key);
+        else selectedPendingOrderKeys.delete(key);
+        updateSelectionUi();
+        return;
+      }
+      if (!target.dataset.eaSelect) return;
       const row = rows.find((item) => item.ea_id === target.dataset.eaSelect);
       if (target.checked && row && !canTradeRow(row)) {
         target.checked = false;

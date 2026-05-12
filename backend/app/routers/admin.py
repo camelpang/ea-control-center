@@ -262,7 +262,14 @@ def validate_command_payload(payload: CommandCreateIn) -> dict:
         _validate_trade_symbol(symbol)
 
     if command_type in {CommandType.close_ticket, CommandType.cancel_order}:
-        _require_payload_text(data, "ticket")
+        tickets = data.get("tickets")
+        if isinstance(tickets, list):
+            normalized_tickets = [str(ticket).strip() for ticket in tickets if str(ticket).strip()]
+            if not normalized_tickets:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少必填参数：ticket")
+            data["tickets"] = normalized_tickets
+        else:
+            _require_payload_text(data, "ticket")
 
     if command_type == CommandType.close_all:
         slippage = _payload_number(data, "max_slippage_points")
@@ -281,6 +288,7 @@ def command_payload_summary(payload: dict) -> dict:
         "order_type",
         "price",
         "ticket",
+        "tickets",
         "max_slippage_points",
         "manual_trade",
         "manual_manage",

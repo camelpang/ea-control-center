@@ -489,6 +489,49 @@ def test_cancel_order_command_type_accepted(client: TestClient) -> None:
     assert r.json()["command_type"] == "cancel_order"
 
 
+def test_ticket_batch_commands_are_accepted(client: TestClient) -> None:
+    ea_id = "pytest-ticket-batch-001"
+    assert (
+        client.post(
+            "/api/ea/heartbeat",
+            headers={"X-EA-Token": "test_ea_token"},
+            json={"ea_id": ea_id, "terminal": "MT5", "status": "online"},
+        ).status_code
+        == 200
+    )
+    close_command = client.post(
+        "/api/admin/commands",
+        headers={"X-Admin-Token": "test_admin_token"},
+        json={
+            "ea_id": ea_id,
+            "command_type": "close_ticket",
+            "payload": {"tickets": ["1001", "1002"]},
+            "requested_by": "pytest",
+        },
+    )
+    assert close_command.status_code == 201
+    assert close_command.json()["payload"]["tickets"] == ["1001", "1002"]
+
+    client.post(
+        f"/api/ea/commands/{close_command.json()['id']}/result",
+        headers={"X-EA-Token": "test_ea_token"},
+        json={"status": "success", "message": "closed=2, failed=0"},
+    )
+
+    cancel_command = client.post(
+        "/api/admin/commands",
+        headers={"X-Admin-Token": "test_admin_token"},
+        json={
+            "ea_id": ea_id,
+            "command_type": "cancel_order",
+            "payload": {"tickets": ["2001", "2002"]},
+            "requested_by": "pytest",
+        },
+    )
+    assert cancel_command.status_code == 201
+    assert cancel_command.json()["payload"]["tickets"] == ["2001", "2002"]
+
+
 def test_snapshot_stores_pending_orders_and_admin_can_read_them(client: TestClient) -> None:
     ea_id = "pytest-pending-orders-001"
     snapshot = client.post(
@@ -1015,6 +1058,12 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "取消此挂单" in r.text
     assert "按此订单平仓" in r.text
     assert "sendQuickTicketCommand" in r.text
+    assert "批量平选中持仓" in r.text
+    assert "批量取消选中挂单" in r.text
+    assert "sendSelectedOrderBatch" in r.text
+    assert "selectedPositionKeys" in r.text
+    assert "data-position-select" in r.text
+    assert "data-pending-order-select" in r.text
     assert "已无当前订单" in r.text
     assert "current_order_count" in r.text
     assert "持仓中" in r.text
