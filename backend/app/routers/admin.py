@@ -17,6 +17,7 @@ from app.models import (
     CommandType,
     EAInstance,
     EAUserAssignment,
+    PendingOrder,
     Position,
     User,
     UserRole,
@@ -35,6 +36,7 @@ from app.schemas import (
     EATokenOut,
     EAOut,
     MessageOut,
+    PendingOrderOut,
     PositionOut,
     SafetyConfigOut,
     SystemCheckOut,
@@ -391,6 +393,14 @@ def dashboard_eas(
             .group_by(Position.ea_id)
         ).all()
     }
+    pending_order_counts = {
+        ea_id: count
+        for ea_id, count in db.execute(
+            select(PendingOrder.ea_id, func.count(PendingOrder.id))
+            .where(PendingOrder.ea_id.in_(visible_ea_ids_stmt(principal)))
+            .group_by(PendingOrder.ea_id)
+        ).all()
+    }
     latest_snapshot_times = {
         ea_id: created_at
         for ea_id, created_at in db.execute(
@@ -445,6 +455,7 @@ def dashboard_eas(
             "last_seen_at": ea.last_seen_at,
             "updated_at": ea.updated_at,
             "positions_count": position_counts.get(ea.ea_id, 0),
+            "pending_orders_count": pending_order_counts.get(ea.ea_id, 0),
             "latest_snapshot_at": latest_snapshot_times.get(ea.ea_id),
             "latest_command_status": latest_command.status if latest_command else None,
             "latest_command_type": latest_command.command_type if latest_command else None,
@@ -485,6 +496,14 @@ def list_eas(
             select(Position.ea_id, func.count(Position.id))
             .where(Position.ea_id.in_(visible_ea_ids_stmt(principal)))
             .group_by(Position.ea_id)
+        ).all()
+    }
+    pending_order_counts = {
+        ea_id: count
+        for ea_id, count in db.execute(
+            select(PendingOrder.ea_id, func.count(PendingOrder.id))
+            .where(PendingOrder.ea_id.in_(visible_ea_ids_stmt(principal)))
+            .group_by(PendingOrder.ea_id)
         ).all()
     }
     latest_snapshot_times = {
@@ -541,6 +560,7 @@ def list_eas(
                 "last_seen_at": ea.last_seen_at,
                 "updated_at": ea.updated_at,
                 "positions_count": position_counts.get(ea.ea_id, 0),
+                "pending_orders_count": pending_order_counts.get(ea.ea_id, 0),
                 "latest_snapshot_at": latest_snapshot_times.get(ea.ea_id),
                 "latest_command_status": latest_command.status if latest_command else None,
                 "latest_command_type": latest_command.command_type if latest_command else None,
@@ -1100,6 +1120,18 @@ def list_positions(
 ) -> list[Position]:
     require_ea_access(db, principal, ea_id)
     return list(db.scalars(select(Position).where(Position.ea_id == ea_id).order_by(Position.symbol.asc())))
+
+
+@router.get("/eas/{ea_id}/pending-orders", response_model=list[PendingOrderOut])
+def list_pending_orders(
+    ea_id: str,
+    db: Session = Depends(get_db),
+    principal: AdminPrincipal = Depends(require_console_access),
+) -> list[PendingOrder]:
+    require_ea_access(db, principal, ea_id)
+    return list(
+        db.scalars(select(PendingOrder).where(PendingOrder.ea_id == ea_id).order_by(PendingOrder.symbol.asc(), PendingOrder.ticket.asc()))
+    )
 
 
 @router.get("/eas/{ea_id}/snapshots", response_model=list[AccountSnapshotOut])

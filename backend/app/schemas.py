@@ -37,6 +37,20 @@ class PositionIn(BaseModel):
     raw: dict[str, Any] | None = None
 
 
+class PendingOrderIn(BaseModel):
+    ticket: str
+    symbol: str
+    order_type: str
+    side: Literal["buy", "sell"] | str | None = None
+    volume: Decimal | None = None
+    price: Decimal | None = None
+    sl: Decimal | None = None
+    tp: Decimal | None = None
+    state: str | None = None
+    opened_at: datetime | None = None
+    raw: dict[str, Any] | None = None
+
+
 class SnapshotIn(BaseModel):
     ea_id: str = Field(min_length=3, max_length=128, pattern=EA_ID_PATTERN, description=EA_ID_HELP)
     account_number: str | None = None
@@ -48,6 +62,7 @@ class SnapshotIn(BaseModel):
     margin_level: Decimal | None = None
     profit: Decimal | None = None
     positions: list[PositionIn] = Field(default_factory=list)
+    pending_orders: list[PendingOrderIn] = Field(default_factory=list)
     raw: dict[str, Any] | None = None
 
 
@@ -91,6 +106,7 @@ class EAOut(BaseModel):
     last_seen_at: datetime
     updated_at: datetime
     positions_count: int = 0
+    pending_orders_count: int = 0
     latest_snapshot_at: datetime | None = None
     latest_command_status: CommandStatus | None = None
     latest_command_type: CommandType | None = None
@@ -131,6 +147,21 @@ class PositionOut(BaseModel):
     sl: Decimal | None
     tp: Decimal | None
     profit: Decimal | None
+    updated_at: datetime
+
+
+class PendingOrderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    ticket: str
+    symbol: str
+    order_type: str
+    side: str | None
+    volume: Decimal | None
+    price: Decimal | None
+    sl: Decimal | None
+    tp: Decimal | None
+    state: str | None
     updated_at: datetime
 
 
@@ -182,6 +213,7 @@ class SnapshotAck(BaseModel):
     ea_id: str
     snapshot_id: int
     positions_count: int
+    pending_orders_count: int = 0
 
 
 class MessageOut(BaseModel):

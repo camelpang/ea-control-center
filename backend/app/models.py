@@ -146,6 +146,30 @@ class Position(Base):
     snapshot: Mapped[AccountSnapshot | None] = relationship(back_populates="positions")
 
 
+class PendingOrder(Base):
+    __tablename__ = "pending_orders"
+    __table_args__ = (
+        UniqueConstraint("ea_id", "ticket", name="uq_pending_orders_ea_ticket"),
+        Index("ix_pending_orders_ea_symbol", "ea_id", "symbol"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ea_id: Mapped[str] = mapped_column(String(128), ForeignKey("ea_instances.ea_id"), index=True)
+    snapshot_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("account_snapshots.id"))
+    ticket: Mapped[str] = mapped_column(String(64), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    order_type: Mapped[str] = mapped_column(String(32))
+    side: Mapped[str | None] = mapped_column(String(16))
+    volume: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    price: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    sl: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    tp: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    state: Mapped[str | None] = mapped_column(String(32))
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    raw: Mapped[dict | None] = mapped_column(JSON_TYPE)
+
+
 class Command(Base):
     __tablename__ = "commands"
     __table_args__ = (Index("ix_commands_ea_status", "ea_id", "status"),)

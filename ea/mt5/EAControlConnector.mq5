@@ -475,6 +475,95 @@ string BuildPositionsJson()
    return result;
 }
 
+string OrderTypeName(long type)
+{
+   if(type == ORDER_TYPE_BUY_LIMIT)
+      return "buy_limit";
+   if(type == ORDER_TYPE_SELL_LIMIT)
+      return "sell_limit";
+   if(type == ORDER_TYPE_BUY_STOP)
+      return "buy_stop";
+   if(type == ORDER_TYPE_SELL_STOP)
+      return "sell_stop";
+   if(type == ORDER_TYPE_BUY_STOP_LIMIT)
+      return "buy_stop_limit";
+   if(type == ORDER_TYPE_SELL_STOP_LIMIT)
+      return "sell_stop_limit";
+   return "unknown";
+}
+
+string OrderSideName(long type)
+{
+   if(type == ORDER_TYPE_SELL_LIMIT || type == ORDER_TYPE_SELL_STOP || type == ORDER_TYPE_SELL_STOP_LIMIT)
+      return "sell";
+   if(type == ORDER_TYPE_BUY_LIMIT || type == ORDER_TYPE_BUY_STOP || type == ORDER_TYPE_BUY_STOP_LIMIT)
+      return "buy";
+   return "";
+}
+
+string BuildPendingOrderRawJson(ulong ticket, long type, long state)
+{
+   string raw =
+      "{"
+      "\"ticket\":\"" + (string)ticket + "\","
+      + "\"order_type\":" + IntegerToString((int)type) + ","
+      + "\"order_state\":" + IntegerToString((int)state)
+      + "}";
+   return raw;
+}
+
+string BuildPendingOrdersJson()
+{
+   string result = "[";
+   bool first = true;
+   int total = OrdersTotal();
+
+   for(int i = 0; i < total; i++)
+   {
+      ulong ticket = OrderGetTicket(i);
+      if(ticket == 0)
+         continue;
+      if(!OrderSelect(ticket))
+         continue;
+
+      string symbol = OrderGetString(ORDER_SYMBOL);
+      long type = OrderGetInteger(ORDER_TYPE);
+      long state = OrderGetInteger(ORDER_STATE);
+      string order_type = OrderTypeName(type);
+      string side = OrderSideName(type);
+      double volume = OrderGetDouble(ORDER_VOLUME_CURRENT);
+      double price = OrderGetDouble(ORDER_PRICE_OPEN);
+      double sl = OrderGetDouble(ORDER_SL);
+      double tp = OrderGetDouble(ORDER_TP);
+
+      int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+      if(digits < 0)
+         digits = _Digits;
+
+      string item =
+         "{"
+         "\"ticket\":\"" + (string)ticket + "\","
+         + "\"symbol\":\"" + EscapeJson(symbol) + "\","
+         + "\"order_type\":\"" + order_type + "\","
+         + "\"side\":\"" + side + "\","
+         + "\"volume\":" + DoubleToString(volume, 2) + ","
+         + "\"price\":" + DoubleToString(price, digits) + ","
+         + "\"sl\":" + DoubleToString(sl, digits) + ","
+         + "\"tp\":" + DoubleToString(tp, digits) + ","
+         + "\"state\":\"" + IntegerToString((int)state) + "\","
+         + "\"raw\":" + BuildPendingOrderRawJson(ticket, type, state)
+         + "}";
+
+      if(!first)
+         result += ",";
+      result += item;
+      first = false;
+   }
+
+   result += "]";
+   return result;
+}
+
 bool SendSnapshot()
 {
    string account = (string)AccountInfoInteger(ACCOUNT_LOGIN);
@@ -505,6 +594,7 @@ bool SendSnapshot()
       + "\"margin_level\":" + DoubleToString(margin_level, 2) + ","
       + "\"profit\":" + DoubleToString(profit, 2) + ","
       + "\"positions\":" + BuildPositionsJson() + ","
+      + "\"pending_orders\":" + BuildPendingOrdersJson() + ","
       + "\"raw\":" + raw
       + "}";
 
@@ -513,7 +603,7 @@ bool SendSnapshot()
    if(!SendApiRequest("POST", "/api/ea/snapshot", payload, status, body))
       return false;
 
-   LogMessage("Snapshot accepted positions=" + IntegerToString(PositionsTotal()));
+   LogMessage("Snapshot accepted positions=" + IntegerToString(PositionsTotal()) + " pending_orders=" + IntegerToString(OrdersTotal()));
    return true;
 }
 

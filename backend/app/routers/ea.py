@@ -6,7 +6,18 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import AccountSnapshot, AuditLog, Command, CommandLog, CommandStatus, CommandType, EAInstance, Position, utc_now
+from app.models import (
+    AccountSnapshot,
+    AuditLog,
+    Command,
+    CommandLog,
+    CommandStatus,
+    CommandType,
+    EAInstance,
+    PendingOrder,
+    Position,
+    utc_now,
+)
 from app.schemas import CommandOut, CommandResultIn, HeartbeatIn, MessageOut, SnapshotAck, SnapshotIn
 from app.security import verify_password
 
@@ -153,8 +164,33 @@ def snapshot(
             )
         )
 
+    db.query(PendingOrder).filter(PendingOrder.ea_id == payload.ea_id).delete(synchronize_session=False)
+    for item in payload.pending_orders:
+        db.add(
+            PendingOrder(
+                ea_id=payload.ea_id,
+                snapshot_id=account_snapshot.id,
+                ticket=item.ticket,
+                symbol=item.symbol,
+                order_type=item.order_type,
+                side=item.side,
+                volume=item.volume,
+                price=item.price,
+                sl=item.sl,
+                tp=item.tp,
+                state=item.state,
+                opened_at=item.opened_at,
+                raw=item.raw,
+            )
+        )
+
     db.commit()
-    return SnapshotAck(ea_id=payload.ea_id, snapshot_id=account_snapshot.id, positions_count=len(payload.positions))
+    return SnapshotAck(
+        ea_id=payload.ea_id,
+        snapshot_id=account_snapshot.id,
+        positions_count=len(payload.positions),
+        pending_orders_count=len(payload.pending_orders),
+    )
 
 
 @router.get("/commands", response_model=list[CommandOut])

@@ -489,6 +489,50 @@ def test_cancel_order_command_type_accepted(client: TestClient) -> None:
     assert r.json()["command_type"] == "cancel_order"
 
 
+def test_snapshot_stores_pending_orders_and_admin_can_read_them(client: TestClient) -> None:
+    ea_id = "pytest-pending-orders-001"
+    snapshot = client.post(
+        "/api/ea/snapshot",
+        headers={"X-EA-Token": "test_ea_token"},
+        json={
+            "ea_id": ea_id,
+            "account_number": "100001",
+            "currency": "USD",
+            "balance": 1000,
+            "equity": 1000,
+            "positions": [],
+            "pending_orders": [
+                {
+                    "ticket": "509150886",
+                    "symbol": "XAUUSD.c",
+                    "order_type": "sell_limit",
+                    "side": "sell",
+                    "volume": 1,
+                    "price": 4900,
+                    "sl": 5000,
+                    "tp": 4700,
+                    "state": "placed",
+                }
+            ],
+        },
+    )
+    assert snapshot.status_code == 200
+    assert snapshot.json()["positions_count"] == 0
+    assert snapshot.json()["pending_orders_count"] == 1
+
+    orders = client.get(f"/api/admin/eas/{ea_id}/pending-orders", headers={"X-Admin-Token": "test_admin_token"})
+    assert orders.status_code == 200
+    body = orders.json()
+    assert len(body) == 1
+    assert body[0]["ticket"] == "509150886"
+    assert body[0]["order_type"] == "sell_limit"
+
+    dashboard_rows = client.get("/api/admin/dashboard/eas", headers={"X-Admin-Token": "test_admin_token"})
+    assert dashboard_rows.status_code == 200
+    dashboard_ea = next(row for row in dashboard_rows.json() if row["ea_id"] == ea_id)
+    assert dashboard_ea["pending_orders_count"] == 1
+
+
 def test_open_order_payload_validation_rejects_invalid_volume(client: TestClient) -> None:
     ea_id = "pytest-open-validation-001"
     assert (
@@ -962,10 +1006,17 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "onlineStatusText" in r.text
     assert "enrichRowsWithPositions" in r.text
     assert "/positions" in r.text
+    assert "/pending-orders" in r.text
     assert "matchingPositionForRow" in r.text
     assert "orderTicketFromCommand" in r.text
     assert "order_ticket" in r.text
     assert "当前持仓" in r.text
+    assert "当前挂单" in r.text
+    assert "取消此挂单" in r.text
+    assert "按此订单平仓" in r.text
+    assert "sendQuickTicketCommand" in r.text
+    assert "已无当前订单" in r.text
+    assert "current_order_count" in r.text
     assert "持仓中" in r.text
     assert 'id="opSymbol" class="input" type="text" value="XAUUSD"' in r.text
     assert "openConfirmDialog" in r.text

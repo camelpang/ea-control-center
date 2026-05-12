@@ -106,3 +106,41 @@ Fix:
 - MT5 pending-order success messages now include `order_ticket=<ticket>` from `CTrade::ResultOrder()`.
 - Manual trades cards now parse `ticket`, `order_ticket`, or `order=<number>` from command payloads and command result logs.
 - Existing pending orders created before this EA update still require copying the ticket from the MT5 Trade tab.
+
+## 2026-05-12 Complete Manual Order Details
+
+Observed during public-IP testing:
+
+- One EA can have multiple open positions and pending orders at the same time.
+- The manual trades card only surfaced one synthesized order number, so operators could not see the full current order set.
+
+Fix:
+
+- MT5 snapshots now include `pending_orders` alongside `positions`.
+- Backend stores the latest pending orders in `pending_orders` and exposes `/api/admin/eas/{ea_id}/pending-orders`.
+- `/api/admin/dashboard/eas` and `/api/admin/eas` now include `pending_orders_count`.
+- Manual trades cards now show separate `当前持仓` and `当前挂单` sections.
+- Each open position has a `按此订单平仓` quick button, and each pending order has a `取消此挂单` quick button.
+
+Operational note:
+
+- After deployment, run Alembic upgrade so `20260512_0003_add_pending_orders.py` creates the new table.
+- Recompile and reload the MT5 EA so snapshots start sending `pending_orders`.
+
+## 2026-05-12 Manual Close Outside System
+
+Observed during production testing:
+
+- The operator manually closed open positions and cancelled pending orders in MT5.
+- The manual trades page still showed the EA as if it had active orders because historical manual `open_order` commands were treated as active manual-management rows.
+
+Fix:
+
+- Manual trades classification now treats the latest snapshot as the source of truth for current orders.
+- If both `positions_count` and `pending_orders_count` are zero, historical manual open/pending rows are marked `已无当前订单`.
+- The default `全部人工介入` view hides these cleared historical rows; they remain visible under `已恢复自动` for audit/history review.
+
+Operational note:
+
+- After manual MT5-side close/cancel, wait for the next EA snapshot interval or click refresh after the next snapshot is accepted.
+- If the row still shows current orders, confirm the MT5 journal prints `Snapshot accepted positions=0 pending_orders=0`.

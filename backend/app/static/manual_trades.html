@@ -257,6 +257,59 @@
     }
     .metrics dt { margin: 0; color: var(--muted); }
     .metrics dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+    .order-section {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(30, 58, 95, 0.72);
+    }
+    .order-section h3 {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px;
+      color: #cbd5e1;
+      font-size: 0.9rem;
+    }
+    .order-list {
+      display: grid;
+      gap: 8px;
+    }
+    .order-item {
+      border: 1px solid rgba(30, 58, 95, 0.82);
+      border-radius: 12px;
+      background: rgba(7, 11, 20, 0.42);
+      padding: 10px;
+    }
+    .order-item-main {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .order-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .order-meta span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .order-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .button.small {
+      padding: 6px 9px;
+      font-size: 12px;
+    }
     .payload {
       max-height: 108px;
       overflow: auto;
@@ -345,7 +398,7 @@
   <header>
     <div>
       <h1>人工建仓 / 挂单建仓管理</h1>
-      <div class="meta">轻量模式：基于最近命令历史和 payload 标记分类，不改数据库结构。</div>
+      <div class="meta">集中查看当前持仓、当前挂单和人工命令，可按订单号快速平仓或取消挂单。</div>
     </div>
     <div class="actions">
       <a href="/dashboard">监控大屏</a>
@@ -726,7 +779,7 @@
     function latestAfter(commands, baseCommand, types) {
       return commands.find((command) => after(command, baseCommand) && types.includes(command.command_type)) || null;
     }
-    function classifyTrade(manualCommand, allEaCommands) {
+    function classifyTrade(manualCommand, allEaCommands, hasCurrentOrders) {
       const payload = payloadOf(manualCommand);
       const pending = isPendingOrderPayload(payload);
       const managed = manualCommand.command_type === "manual_manage" || payload.manual_manage === true;
@@ -734,8 +787,10 @@
       const laterClose = latestAfter(allEaCommands, manualCommand, ["close_all", "close_symbol", "close_ticket"]);
       const inProgress = ["pending", "received", "executing"].includes(manualCommand.status);
       const tradeType = managed ? "managed" : (pending ? "pending" : "market");
-      if (laterResume) return { state: "restored", stateText: "已恢复自动", tradeType };
       if (inProgress) return { state: "progress", stateText: "命令处理中", tradeType };
+      if (!hasCurrentOrders && !managed) return { state: "restored", stateText: "已无当前订单", tradeType };
+      if (laterResume) return { state: "restored", stateText: "已恢复自动", tradeType };
+      if (laterClose && !hasCurrentOrders) return { state: "restored", stateText: "已无当前订单", tradeType };
       if (laterClose) return { state: "active", stateText: "人工管理中", tradeType };
       return { state: "active", stateText: "人工管理中", tradeType };
     }
@@ -744,10 +799,16 @@
     }
     function rowFromEa(ea, eaCommands, manualCommand = null) {
       const payload = payloadOf(manualCommand);
+      const currentOrderCount = Number(ea.positions_count || 0) + Number(ea.pending_orders_count || 0);
+      const hasCurrentOrders = currentOrderCount > 0;
       const cls = manualCommand
-        ? classifyTrade(manualCommand, eaCommands)
-        : (ea.positions_count > 0
-          ? { state: "active", stateText: "持仓中", tradeType: "position" }
+        ? classifyTrade(manualCommand, eaCommands, hasCurrentOrders)
+        : (hasCurrentOrders
+          ? {
+              state: "active",
+              stateText: ea.positions_count > 0 ? "持仓中" : "挂单中",
+              tradeType: ea.positions_count > 0 ? "position" : "pending",
+            }
           : { state: "normal", stateText: "全局筛选", tradeType: "managed" });
       const latestCommand = eaCommands[0] || {};
       return {
@@ -761,10 +822,13 @@
         risk_text: ea.risk_text,
         assigned_users: ea.assigned_users || [],
         positions_count: ea.positions_count,
+        pending_orders_count: ea.pending_orders_count || 0,
+        current_order_count: currentOrderCount,
         equity: ea.equity,
         snapshot_profit: ea.snapshot_profit,
         last_seen_at: ea.last_seen_at,
         positions: [],
+        pending_orders: [],
         manual_command: manualCommand,
         latest_command: latestCommand,
         active_commands: activeCommandsFor(eaCommands),
@@ -772,13 +836,13 @@
         symbol: payload.symbol,
         side: payload.side,
         volume: payload.volume,
-        ticket: orderTicketFromCommand(manualCommand),
+        ticket: hasCurrentOrders ? orderTicketFromCommand(manualCommand) : "",
         state: cls.state,
         stateText: cls.stateText,
         tradeType: cls.tradeType,
         tradeTypeText: manualCommand
           ? (cls.tradeType === "pending" ? "挂单建仓" : (cls.tradeType === "managed" ? "人工管理" : "手动市价建仓"))
-          : (cls.tradeType === "position" ? "当前持仓" : "全局 EA"),
+          : (cls.tradeType === "position" ? "当前持仓" : (cls.tradeType === "pending" ? "当前挂单" : "全局 EA")),
       };
     }
     function buildRows(eas, commands) {
@@ -805,7 +869,7 @@
         eaCommands.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         const manualCommand = eaCommands.find(isManualOpenCommand);
         const ea = eaMap.get(eaId) || {};
-        if (!manualCommand && !(ea.positions_count > 0)) continue;
+        if (!manualCommand && !(ea.positions_count > 0 || ea.pending_orders_count > 0)) continue;
         if (manualCommand?.command_type === "manual_release") continue;
         result.push(rowFromEa({ ...ea, ea_id: eaId }, eaCommands, manualCommand));
       }
@@ -826,32 +890,93 @@
     function ticketsFromPositions(positions) {
       return (positions || []).map((position) => position.ticket).filter(Boolean);
     }
+    function ticketsFromOrders(orders) {
+      return (orders || []).map((order) => order.ticket).filter(Boolean);
+    }
+    function renderPositions(row) {
+      const positions = Array.isArray(row.positions) ? row.positions : [];
+      if (!positions.length) return `<div class="meta">暂无当前持仓。</div>`;
+      return `<div class="order-list">${positions.map((position) => `
+        <div class="order-item">
+          <div class="order-item-main">
+            <strong>#${escapeHtml(position.ticket)} · ${escapeHtml(position.symbol)} · ${escapeHtml(position.side)}</strong>
+            <span class="meta">${escapeHtml(position.volume ?? "-")} 手</span>
+          </div>
+          <div class="order-meta">
+            <span>开仓价：${escapeHtml(position.open_price ?? "-")}</span>
+            <span>现价：${escapeHtml(position.current_price ?? "-")}</span>
+            <span>止损：${escapeHtml(position.sl ?? "-")}</span>
+            <span>止盈：${escapeHtml(position.tp ?? "-")}</span>
+            <span>浮盈亏：${escapeHtml(position.profit ?? "-")}</span>
+            <span>更新：${fmtDate(position.updated_at)}</span>
+          </div>
+          <div class="order-actions">
+            <button class="button small danger" type="button" data-quick-op="close_ticket" data-ea-id="${escapeHtml(row.ea_id)}" data-ticket="${escapeHtml(position.ticket)}">按此订单平仓</button>
+          </div>
+        </div>
+      `).join("")}</div>`;
+    }
+    function renderPendingOrders(row) {
+      const orders = Array.isArray(row.pending_orders) ? row.pending_orders : [];
+      if (!orders.length) return `<div class="meta">暂无当前挂单。</div>`;
+      return `<div class="order-list">${orders.map((order) => `
+        <div class="order-item">
+          <div class="order-item-main">
+            <strong>#${escapeHtml(order.ticket)} · ${escapeHtml(order.symbol)} · ${escapeHtml(order.order_type)}</strong>
+            <span class="meta">${escapeHtml(order.volume ?? "-")} 手</span>
+          </div>
+          <div class="order-meta">
+            <span>方向：${escapeHtml(order.side || "-")}</span>
+            <span>价格：${escapeHtml(order.price ?? "-")}</span>
+            <span>止损：${escapeHtml(order.sl ?? "-")}</span>
+            <span>止盈：${escapeHtml(order.tp ?? "-")}</span>
+            <span>状态：${escapeHtml(order.state || "-")}</span>
+            <span>更新：${fmtDate(order.updated_at)}</span>
+          </div>
+          <div class="order-actions">
+            <button class="button small danger" type="button" data-quick-op="cancel_order" data-ea-id="${escapeHtml(row.ea_id)}" data-ticket="${escapeHtml(order.ticket)}">取消此挂单</button>
+          </div>
+        </div>
+      `).join("")}</div>`;
+    }
     async function enrichRowsWithPositions(targetRows) {
-      const rowsNeedingPositions = targetRows.filter((row) => row.positions_count > 0);
-      const uniqueEaIds = [...new Set(rowsNeedingPositions.map((row) => row.ea_id).filter(Boolean))];
+      const rowsNeedingOrderDetails = targetRows.filter((row) => row.current_order_count > 0);
+      const uniqueEaIds = [...new Set(rowsNeedingOrderDetails.map((row) => row.ea_id).filter(Boolean))];
       if (!uniqueEaIds.length) return;
-      const results = await Promise.allSettled(uniqueEaIds.map(async (eaId) => ({
-        eaId,
-        positions: await api(`/api/admin/eas/${encodeURIComponent(eaId)}/positions`),
-      })));
+      const results = await Promise.allSettled(uniqueEaIds.map(async (eaId) => {
+        const [positions, pendingOrders] = await Promise.all([
+          api(`/api/admin/eas/${encodeURIComponent(eaId)}/positions`),
+          api(`/api/admin/eas/${encodeURIComponent(eaId)}/pending-orders`),
+        ]);
+        return { eaId, positions, pendingOrders };
+      }));
       const positionsByEa = new Map();
+      const pendingOrdersByEa = new Map();
       for (const result of results) {
         if (result.status === "fulfilled") {
           positionsByEa.set(result.value.eaId, result.value.positions || []);
+          pendingOrdersByEa.set(result.value.eaId, result.value.pendingOrders || []);
         }
       }
       for (const row of targetRows) {
         const positions = positionsByEa.get(row.ea_id) || [];
+        const pendingOrders = pendingOrdersByEa.get(row.ea_id) || [];
         row.positions = positions;
+        row.pending_orders = pendingOrders;
+        if (!row.current_order_count) {
+          row.ticket = "";
+          continue;
+        }
         if (!row.ticket) {
           const match = matchingPositionForRow(row, positions);
-          row.ticket = match?.ticket || "";
+          row.ticket = match?.ticket || pendingOrders[0]?.ticket || "";
         }
         if (!row.symbol) {
           const match = matchingPositionForRow(row, positions);
-          row.symbol = match?.symbol || row.symbol;
-          row.side = match?.side || row.side;
-          row.volume = match?.volume ?? row.volume;
+          const pendingOrder = pendingOrders[0] || null;
+          row.symbol = match?.symbol || pendingOrder?.symbol || row.symbol;
+          row.side = match?.side || pendingOrder?.side || row.side;
+          row.volume = match?.volume ?? pendingOrder?.volume ?? row.volume;
         }
       }
     }
@@ -863,6 +988,7 @@
       if (urlFilter.risk === "paused" && row.allow_trading !== false && !["high", "watch", "paused"].includes(String(row.risk_level || ""))) return false;
       if (urlFilter.commands === "active" && !row.active_commands.length) return false;
       if (!hasUrlFilter()) {
+        if (filter === "all" && row.state === "restored" && row.current_order_count === 0) return false;
         if (filter === "active" && !["active", "progress"].includes(row.state)) return false;
         if (filter === "managed" && row.tradeType !== "managed") return false;
         if (filter === "pending" && row.tradeType !== "pending") return false;
@@ -964,16 +1090,24 @@
             <dl class="metrics">
               <dt>品种 / 方向</dt><dd>${escapeHtml(row.symbol || "-")} / ${escapeHtml(row.side || "-")}</dd>
               <dt>手数</dt><dd>${escapeHtml(row.volume ?? "-")}</dd>
-              <dt>订单号</dt><dd title="${escapeHtml(ticketsFromPositions(row.positions).join(", ") || row.ticket || "")}">${escapeHtml(row.ticket || "-")}</dd>
+              <dt>订单号</dt><dd title="${escapeHtml([...ticketsFromPositions(row.positions), ...ticketsFromOrders(row.pending_orders)].join(", ") || row.ticket || "")}">${escapeHtml(row.ticket || "-")}</dd>
               <dt>归属分配</dt><dd title="${escapeHtml(assignmentTextForRow(row))}">${escapeHtml(assignmentTextForRow(row))}</dd>
               <dt>净值 / 浮盈亏</dt><dd>${fmtNum(row.equity)} / ${fmtNum(row.snapshot_profit)}</dd>
-              <dt>持仓数</dt><dd>${escapeHtml(row.positions_count ?? 0)}</dd>
+              <dt>持仓 / 挂单</dt><dd>${escapeHtml(row.positions_count ?? 0)} / ${escapeHtml(row.pending_orders_count ?? 0)}</dd>
               <dt>人工命令</dt><dd>${row.manual_command ? `#${escapeHtml(row.manual_command.id)} · ${escapeHtml(row.manual_command.status)}` : "无"}</dd>
               <dt>建仓时间</dt><dd>${row.manual_command ? fmtDate(row.manual_command.created_at) : "-"}</dd>
               <dt>最新命令</dt><dd>${row.latest_command && row.latest_command.command_type ? `${escapeHtml(commandText(row.latest_command.command_type))} · ${escapeHtml(row.latest_command.status)}` : "-"}</dd>
               <dt>未完成命令</dt><dd>${escapeHtml(row.active_commands.length)}</dd>
               <dt>最后心跳</dt><dd>${fmtDate(row.last_seen_at)}</dd>
             </dl>
+            <section class="order-section">
+              <h3><span>当前持仓</span><span class="meta">${escapeHtml((row.positions || []).length)} 条</span></h3>
+              ${renderPositions(row)}
+            </section>
+            <section class="order-section">
+              <h3><span>当前挂单</span><span class="meta">${escapeHtml((row.pending_orders || []).length)} 条</span></h3>
+              ${renderPendingOrders(row)}
+            </section>
           </article>`;
       }).join("");
       updateSelectionUi();
@@ -1233,6 +1367,40 @@
         showMsg(e.message || String(e), "err");
       }
     }
+    async function sendQuickTicketCommand(eaId, operation, ticket) {
+      if (!ticket) {
+        showMsg("缺少 ticket，无法执行快捷操作。", "err");
+        return;
+      }
+      const row = rows.find((item) => item.ea_id === eaId);
+      if (!row) {
+        showMsg("找不到对应 EA，无法发送快捷命令。", "err");
+        return;
+      }
+      if (!canTradeRow(row)) {
+        showMsg("当前用户没有该 EA 的交易权限，不能执行快捷操作。", "err");
+        return;
+      }
+      const command = {
+        ea_id: row.ea_id,
+        command_type: commandTypeForOperation(operation),
+        payload: { ticket, source: "manual-trades-ui", quick_action: true },
+        requested_by: (document.getElementById("bulkRequestedBy").value || "").trim() || "manual-trades-ui",
+      };
+      const ok = await openConfirmDialog(buildConfirmPreview([row], [command], operation, command.requested_by));
+      if (!ok) return;
+      try {
+        await api("/api/admin/commands", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(command),
+        });
+        showMsg(`已发送“${commandText(operation)}”命令：ticket=${ticket}`, "ok");
+        await load();
+      } catch (e) {
+        showMsg(e.message || String(e), "err");
+      }
+    }
     function schedule() {
       if (timer) clearInterval(timer);
       timer = null;
@@ -1297,6 +1465,11 @@
       const card = target.closest(".trade-card");
       if (card) card.classList.toggle("selected", target.checked);
       updateSelectionUi();
+    });
+    grid.addEventListener("click", (event) => {
+      const button = event.target instanceof HTMLElement ? event.target.closest("[data-quick-op]") : null;
+      if (!(button instanceof HTMLElement)) return;
+      sendQuickTicketCommand(button.dataset.eaId || "", button.dataset.quickOp || "", button.dataset.ticket || "");
     });
     const saved = localStorage.getItem("ea-admin-token");
     if (saved) adminTokenEl.value = saved;
