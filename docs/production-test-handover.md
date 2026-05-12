@@ -78,3 +78,17 @@ Fix:
 
 - Dashboard EA cards now show `归属分配` from the existing `assigned_users` API field.
 - Manual trades EA cards also show the same assignment summary, so operators can confirm ownership before sending close/manual commands.
+
+## 2026-05-12 Production Enum Sync
+
+Observed during public-IP testing:
+
+- Creating a close-by-ticket command returned `500 Internal Server Error`.
+- Backend logs showed PostgreSQL rejected `cancel_order` in the `command_type` enum during active-command lock checking.
+- The production database enum still had the older command list: pause/resume/close/open/update only.
+
+Fix:
+
+- Added Alembic migration `20260512_0002_sync_command_type_enum.py`.
+- The migration adds missing PostgreSQL enum values: `cancel_order`, `manual_manage`, and `manual_release`.
+- After deployment, close-by-ticket and manual-management commands can be created without the enum mismatch.
