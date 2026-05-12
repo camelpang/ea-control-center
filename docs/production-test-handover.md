@@ -92,3 +92,17 @@ Fix:
 - Added Alembic migration `20260512_0002_sync_command_type_enum.py`.
 - The migration adds missing PostgreSQL enum values: `cancel_order`, `manual_manage`, and `manual_release`.
 - After deployment, close-by-ticket and manual-management commands can be created without the enum mismatch.
+
+## 2026-05-12 Pending Order Ticket Visibility
+
+Observed during public-IP testing:
+
+- A pending order was placed successfully, but the manual trades card could not show an order number.
+- Pending orders are not open positions, so they do not appear in the snapshot `positions` list.
+- The MT5 connector result message did not include the broker pending-order ticket, so the UI had nothing to use for `cancel_order`.
+
+Fix:
+
+- MT5 pending-order success messages now include `order_ticket=<ticket>` from `CTrade::ResultOrder()`.
+- Manual trades cards now parse `ticket`, `order_ticket`, or `order=<number>` from command payloads and command result logs.
+- Existing pending orders created before this EA update still require copying the ticket from the MT5 Trade tab.

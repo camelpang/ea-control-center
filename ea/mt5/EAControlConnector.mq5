@@ -754,7 +754,9 @@ bool OpenPendingOrder(string payload_json, string &message)
       return false;
    }
 
-   message = "pending order placed symbol=" + resolved_symbol + symbol_note + ", type=" + order_type + ", volume=" + DoubleToString(volume, 2);
+   ulong order_ticket = g_trade.ResultOrder();
+   message = "pending order placed symbol=" + resolved_symbol + symbol_note + ", type=" + order_type
+      + ", volume=" + DoubleToString(volume, 2) + ", order_ticket=" + (string)order_ticket;
    return true;
 }
 

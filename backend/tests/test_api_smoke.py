@@ -963,6 +963,8 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "enrichRowsWithPositions" in r.text
     assert "/positions" in r.text
     assert "matchingPositionForRow" in r.text
+    assert "orderTicketFromCommand" in r.text
+    assert "order_ticket" in r.text
     assert "当前持仓" in r.text
     assert "持仓中" in r.text
     assert 'id="opSymbol" class="input" type="text" value="XAUUSD"' in r.text

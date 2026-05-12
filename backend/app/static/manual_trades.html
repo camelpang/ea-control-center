@@ -685,6 +685,24 @@
     function orderTicketFromPayload(payload) {
       return payload.ticket || payload.order_ticket || payload.pending_ticket || payload.order || "";
     }
+    function orderTicketFromText(text) {
+      const match = String(text || "").match(/(?:order_ticket|ticket|order)=([0-9]+)/i);
+      return match ? match[1] : "";
+    }
+    function orderTicketFromCommand(command) {
+      const payloadTicket = orderTicketFromPayload(payloadOf(command));
+      if (payloadTicket) return payloadTicket;
+      const logs = Array.isArray(command?.logs) ? command.logs : [];
+      for (let i = logs.length - 1; i >= 0; i--) {
+        const log = logs[i];
+        const raw = log?.raw && typeof log.raw === "object" ? log.raw : {};
+        const rawTicket = orderTicketFromPayload(raw) || orderTicketFromText(raw.detail);
+        if (rawTicket) return rawTicket;
+        const messageTicket = orderTicketFromText(log?.message);
+        if (messageTicket) return messageTicket;
+      }
+      return "";
+    }
     function isPendingOrderPayload(payload) {
       const mode = String(payload.order_mode || payload.mode || "").toLowerCase();
       const type = String(payload.order_type || payload.type || "").toLowerCase();
@@ -754,7 +772,7 @@
         symbol: payload.symbol,
         side: payload.side,
         volume: payload.volume,
-        ticket: orderTicketFromPayload(payload),
+        ticket: orderTicketFromCommand(manualCommand),
         state: cls.state,
         stateText: cls.stateText,
         tradeType: cls.tradeType,
