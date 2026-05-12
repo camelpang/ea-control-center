@@ -127,6 +127,41 @@ def test_admin_can_create_user_and_assignment(client: TestClient) -> None:
     assert any(row["username"] == "pytest-user" for row in rows.json())
 
 
+def test_assignment_display_includes_trade_only_users(client: TestClient) -> None:
+    ea_id = "pytest-trade-only-assigned-ea"
+    username = "pytest-trade-only-user"
+    assert (
+        client.post(
+            "/api/ea/heartbeat",
+            headers={"X-EA-Token": "test_ea_token"},
+            json={"ea_id": ea_id, "terminal": "MT5", "status": "online"},
+        ).status_code
+        == 200
+    )
+    user = client.post(
+        "/api/admin/users",
+        headers={"X-Admin-Token": "test_admin_token"},
+        json={"username": username, "password": "secret123", "role": "viewer"},
+    )
+    assert user.status_code == 201
+    assignment = client.post(
+        "/api/admin/assignments",
+        headers={"X-Admin-Token": "test_admin_token"},
+        json={"username": username, "ea_id": ea_id, "can_view": False, "can_trade": True, "is_primary_operator": True},
+    )
+    assert assignment.status_code == 201
+
+    dashboard_rows = client.get("/api/admin/dashboard/eas", headers={"X-Admin-Token": "test_admin_token"})
+    assert dashboard_rows.status_code == 200
+    dashboard_ea = next(row for row in dashboard_rows.json() if row["ea_id"] == ea_id)
+    assert username in dashboard_ea["assigned_users"]
+
+    ea_rows = client.get("/api/admin/eas", headers={"X-Admin-Token": "test_admin_token"})
+    assert ea_rows.status_code == 200
+    ea = next(row for row in ea_rows.json() if row["ea_id"] == ea_id)
+    assert username in ea["assigned_users"]
+
+
 def test_viewer_can_read_own_assignments(client: TestClient) -> None:
     ea_id = "pytest-my-assignment-ea"
     username = "pytest-my-assignment-user"

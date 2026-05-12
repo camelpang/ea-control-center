@@ -2,7 +2,7 @@ import secrets
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, desc, func, select, text
+from sqlalchemy import and_, desc, func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
@@ -66,6 +66,26 @@ def visible_ea_ids_stmt(principal: AdminPrincipal):
             EAUserAssignment.can_view.is_(True),
         )
     )
+
+
+def assignment_display_users_by_ea(db: Session) -> dict[str, list[str]]:
+    rows = db.execute(
+        select(EAUserAssignment.ea_id, User.username)
+        .join(User, User.id == EAUserAssignment.user_id)
+        .where(
+            EAUserAssignment.revoked_at.is_(None),
+            or_(
+                EAUserAssignment.can_view.is_(True),
+                EAUserAssignment.can_trade.is_(True),
+                EAUserAssignment.is_primary_operator.is_(True),
+            ),
+        )
+        .order_by(EAUserAssignment.ea_id.asc(), User.username.asc())
+    ).all()
+    result: dict[str, list[str]] = {}
+    for ea_id, username in rows:
+        result.setdefault(ea_id, []).append(username)
+    return result
 
 
 def require_ea_access(
@@ -379,6 +399,7 @@ def dashboard_eas(
             .group_by(AccountSnapshot.ea_id)
         ).all()
     }
+    assigned_users_by_ea = assignment_display_users_by_ea(db) if principal.role == UserRole.admin.value else {}
 
     result: list[dict] = []
     for ea in eas:
@@ -430,6 +451,7 @@ def dashboard_eas(
             "latest_command_at": latest_command.updated_at if latest_command else None,
             "risk_level": risk_level,
             "risk_text": risk_text,
+            "assigned_users": assigned_users_by_ea.get(ea.ea_id, []),
             "currency": snap.currency if snap else None,
             "balance": snap.balance if snap else None,
             "equity": snap.equity if snap else None,
@@ -473,15 +495,7 @@ def list_eas(
             .group_by(AccountSnapshot.ea_id)
         ).all()
     }
-    assigned_users_by_ea: dict[str, list[str]] = {}
-    if principal.role == UserRole.admin.value:
-        assignment_rows = db.execute(
-            select(EAUserAssignment.ea_id, User.username)
-            .join(User, User.id == EAUserAssignment.user_id)
-            .where(EAUserAssignment.revoked_at.is_(None))
-        ).all()
-        for ea_id, username in assignment_rows:
-            assigned_users_by_ea.setdefault(ea_id, []).append(username)
+    assigned_users_by_ea = assignment_display_users_by_ea(db) if principal.role == UserRole.admin.value else {}
 
     result: list[dict] = []
     for ea in eas:
