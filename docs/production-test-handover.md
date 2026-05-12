@@ -41,3 +41,17 @@ Operational note:
 
 - If this happens again, refresh the command list after the command timeout window. The stale command should become `timeout`, then the next close/open command can be submitted.
 - If the command remains stuck beyond the timeout window after this fix is deployed, check EA journal logs for final result submission failures and verify the EA token configured in MT5.
+
+## 2026-05-12 Manual Trades UI Follow-Up
+
+Observed during production testing:
+
+- Manual trades cards did not show online/offline status directly.
+- Auto-refresh did not provide a `3 秒` option.
+- The card `订单号` field stayed empty after a successful manual open order because the open command payload does not know the broker ticket before execution.
+
+Fix:
+
+- Added an online/offline/unknown status badge to every manual trades card.
+- Added `3 秒` to the auto-refresh dropdown.
+- The page now loads current positions from `/api/admin/eas/{ea_id}/positions` and uses the matched position `ticket` to fill the card order number and the default close-by-ticket value.

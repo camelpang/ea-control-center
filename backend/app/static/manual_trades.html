@@ -244,6 +244,9 @@
     .badge.active { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
     .badge.restored { background: rgba(34, 197, 94, 0.18); color: #86efac; }
     .badge.progress { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
+    .badge.online { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+    .badge.offline { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
+    .badge.unknown { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; }
     .metrics {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -350,6 +353,7 @@
       <a href="/users">用户列表</a>
       <select id="refreshInterval" class="select" title="自动刷新">
         <option value="0">手动刷新</option>
+        <option value="3000">3 秒</option>
         <option value="5000" selected>5 秒</option>
         <option value="10000">10 秒</option>
         <option value="30000">30 秒</option>
@@ -658,6 +662,18 @@
       };
       return map[type] || type || "-";
     }
+    function onlineStatusClass(status) {
+      const value = String(status || "").toLowerCase();
+      if (value === "online") return "online";
+      if (value === "offline") return "offline";
+      return "unknown";
+    }
+    function onlineStatusText(status) {
+      const value = String(status || "").toLowerCase();
+      if (value === "online") return "在线";
+      if (value === "offline") return "离线";
+      return status || "未知";
+    }
     function payloadOf(command) {
       return command && command.payload && typeof command.payload === "object" ? command.payload : {};
     }
@@ -722,6 +738,7 @@
         equity: ea.equity,
         snapshot_profit: ea.snapshot_profit,
         last_seen_at: ea.last_seen_at,
+        positions: [],
         manual_command: manualCommand,
         latest_command: latestCommand,
         active_commands: activeCommandsFor(eaCommands),
@@ -767,6 +784,45 @@
         result.push(rowFromEa({ ...ea, ea_id: eaId }, eaCommands, manualCommand));
       }
       return result.sort((a, b) => new Date(b.manual_command.created_at) - new Date(a.manual_command.created_at));
+    }
+    function matchingPositionForRow(row, positions) {
+      if (!Array.isArray(positions) || !positions.length) return null;
+      const symbol = String(row.symbol || "").toLowerCase();
+      const side = String(row.side || "").toLowerCase();
+      const symbolMatches = symbol ? positions.filter((position) => String(position.symbol || "").toLowerCase() === symbol) : [];
+      const symbolAndSideMatches = symbolMatches.filter((position) => String(position.side || "").toLowerCase() === side);
+      return symbolAndSideMatches[0] || symbolMatches[0] || positions[0] || null;
+    }
+    function ticketsFromPositions(positions) {
+      return (positions || []).map((position) => position.ticket).filter(Boolean);
+    }
+    async function enrichRowsWithPositions(targetRows) {
+      const rowsNeedingPositions = targetRows.filter((row) => row.positions_count > 0);
+      const uniqueEaIds = [...new Set(rowsNeedingPositions.map((row) => row.ea_id).filter(Boolean))];
+      if (!uniqueEaIds.length) return;
+      const results = await Promise.allSettled(uniqueEaIds.map(async (eaId) => ({
+        eaId,
+        positions: await api(`/api/admin/eas/${encodeURIComponent(eaId)}/positions`),
+      })));
+      const positionsByEa = new Map();
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          positionsByEa.set(result.value.eaId, result.value.positions || []);
+        }
+      }
+      for (const row of targetRows) {
+        const positions = positionsByEa.get(row.ea_id) || [];
+        row.positions = positions;
+        if (!row.ticket) {
+          const match = matchingPositionForRow(row, positions);
+          row.ticket = match?.ticket || "";
+        }
+        if (!row.symbol) {
+          const match = matchingPositionForRow(row, positions);
+          row.symbol = match?.symbol || row.symbol;
+          row.side = match?.side || row.side;
+        }
+      }
     }
     function matchesGlobalAndTextFilters(row) {
       const filter = statusFilterEl.value;
@@ -869,6 +925,7 @@
                 </span>
               </div>
               <div class="badges">
+                <span class="badge ${escapeHtml(onlineStatusClass(row.status))}">${escapeHtml(onlineStatusText(row.status))}</span>
                 <span class="badge ${escapeHtml(row.tradeType)}">${escapeHtml(row.tradeTypeText)}</span>
                 <span class="badge ${escapeHtml(row.state === "progress" ? "progress" : row.state)}">${escapeHtml(row.stateText)}</span>
               </div>
@@ -876,7 +933,7 @@
             <dl class="metrics">
               <dt>品种 / 方向</dt><dd>${escapeHtml(row.symbol || "-")} / ${escapeHtml(row.side || "-")}</dd>
               <dt>手数</dt><dd>${escapeHtml(row.volume ?? "-")}</dd>
-              <dt>订单号</dt><dd>${escapeHtml(row.ticket || "-")}</dd>
+              <dt>订单号</dt><dd title="${escapeHtml(ticketsFromPositions(row.positions).join(", ") || row.ticket || "")}">${escapeHtml(row.ticket || "-")}</dd>
               <dt>净值 / 浮盈亏</dt><dd>${fmtNum(row.equity)} / ${fmtNum(row.snapshot_profit)}</dd>
               <dt>持仓数</dt><dd>${escapeHtml(row.positions_count ?? 0)}</dd>
               <dt>人工命令</dt><dd>${row.manual_command ? `#${escapeHtml(row.manual_command.id)} · ${escapeHtml(row.manual_command.status)}` : "无"}</dd>
@@ -898,6 +955,7 @@
           api("/api/admin/commands?limit=500"),
         ]);
         rows = buildRows(eas, commands);
+        await enrichRowsWithPositions(rows);
         selectedEaIds.forEach((eaId) => {
           const row = rows.find((item) => item.ea_id === eaId);
           if (!row || !canTradeRow(row)) selectedEaIds.delete(eaId);
