@@ -88,6 +88,11 @@ def test_weekend_command_loop_pause_and_result(client: TestClient) -> None:
 
 
 def test_dashboard_eas_ok(client: TestClient) -> None:
+    client.post(
+        "/api/ea/snapshot",
+        headers={"X-EA-Token": "test_ea_token"},
+        json={"ea_id": "pytest-market-ref-ea", "raw": {"chart_symbol": "XAUUSD.c", "bid": 4704.09, "ask": 4704.29, "last": 4704.2}},
+    )
     r = client.get("/api/admin/dashboard/eas", headers={"X-Admin-Token": "test_admin_token"})
     assert r.status_code == 200
     body = r.json()
@@ -95,6 +100,10 @@ def test_dashboard_eas_ok(client: TestClient) -> None:
     for row in body:
         assert "ea_id" in row
         assert "snapshot_profit" in row
+    ref_row = next(row for row in body if row["ea_id"] == "pytest-market-ref-ea")
+    assert ref_row["market_symbol"] == "XAUUSD.c"
+    assert ref_row["market_bid"] == "4704.090000"
+    assert ref_row["market_ask"] == "4704.290000"
 
 
 def test_admin_can_create_user_and_assignment(client: TestClient) -> None:
@@ -1064,6 +1073,10 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "selectedPositionKeys" in r.text
     assert "data-position-select" in r.text
     assert "data-pending-order-select" in r.text
+    assert "自动判断 Limit / Stop" in r.text
+    assert "当前价参考" in r.text
+    assert "inferPendingOrderType" in r.text
+    assert "reference_price" in r.text
     assert "已无当前订单" in r.text
     assert "current_order_count" in r.text
     assert "持仓中" in r.text

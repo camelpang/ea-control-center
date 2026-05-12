@@ -478,6 +478,10 @@ def dashboard_eas(
             "free_margin": snap.free_margin if snap else None,
             "margin_level": snap.margin_level if snap else None,
             "snapshot_profit": snap.profit if snap else None,
+            "market_symbol": snap.raw.get("chart_symbol") if snap and isinstance(snap.raw, dict) else None,
+            "market_bid": snap.raw.get("bid") if snap and isinstance(snap.raw, dict) else None,
+            "market_ask": snap.raw.get("ask") if snap and isinstance(snap.raw, dict) else None,
+            "market_last": snap.raw.get("last") if snap and isinstance(snap.raw, dict) else None,
         }
         result.append(row)
     return result

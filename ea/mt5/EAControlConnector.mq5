@@ -635,12 +635,21 @@ bool SendSnapshot()
    double free_margin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    double margin_level = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
    double profit = AccountInfoDouble(ACCOUNT_PROFIT);
+   double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double last = SymbolInfoDouble(_Symbol, SYMBOL_LAST);
+   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
 
    string raw =
       "{"
       "\"company\":\"" + EscapeJson(AccountInfoString(ACCOUNT_COMPANY)) + "\","
       + "\"server\":\"" + EscapeJson(AccountInfoString(ACCOUNT_SERVER)) + "\","
-      + "\"leverage\":" + IntegerToString((int)AccountInfoInteger(ACCOUNT_LEVERAGE))
+      + "\"leverage\":" + IntegerToString((int)AccountInfoInteger(ACCOUNT_LEVERAGE)) + ","
+      + "\"chart_symbol\":\"" + EscapeJson(_Symbol) + "\","
+      + "\"bid\":" + DoubleToString(bid, digits) + ","
+      + "\"ask\":" + DoubleToString(ask, digits) + ","
+      + "\"last\":" + DoubleToString(last, digits) + ","
+      + "\"digits\":" + IntegerToString(digits)
       + "}";
 
    string payload =

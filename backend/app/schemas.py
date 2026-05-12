@@ -133,6 +133,10 @@ class EADashboardCardOut(EAOut):
     free_margin: Decimal | None = None
     margin_level: Decimal | None = None
     snapshot_profit: Decimal | None = None
+    market_symbol: str | None = None
+    market_bid: Decimal | None = None
+    market_ask: Decimal | None = None
+    market_last: Decimal | None = None
 
 
 class PositionOut(BaseModel):

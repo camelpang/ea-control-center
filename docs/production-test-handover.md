@@ -164,3 +164,27 @@ Operational note:
 
 - Batch selected-order actions are safer than `close_all` when only some positions or pending orders should be handled.
 - The confirmation dialog shows the grouped ticket list before commands are sent.
+
+## 2026-05-12 Pending Order Panel Guardrails
+
+Observed during production testing:
+
+- The pending-order form allowed any Limit/Stop type regardless of buy/sell direction.
+- Operators had to decide Limit vs Stop manually without an inline current-price reference.
+
+Fix:
+
+- MT5 snapshots now include chart `bid`, `ask`, `last`, `digits`, and `chart_symbol` in snapshot `raw`.
+- Dashboard EA data exposes `market_symbol`, `market_bid`, `market_ask`, and `market_last`.
+- The manual trades pending-order form shows a current price reference from the selected EA.
+- Pending order type options are filtered by buy/sell direction.
+- A new `自动判断 Limit / Stop` option infers:
+  - buy below reference price -> `buy_limit`
+  - buy above reference price -> `buy_stop`
+  - sell above reference price -> `sell_limit`
+  - sell below reference price -> `sell_stop`
+
+Operational note:
+
+- For automatic pending-order type inference, select an EA with a fresh snapshot first.
+- If no current price is available, choose Buy/Sell Limit/Stop manually.

@@ -501,13 +501,16 @@
             <input id="opComment" class="input" type="text" placeholder="订单备注（可选）" />
           </div>
           <div class="op-fields" data-op-fields="open_pending">
+            <div id="marketPriceHint" class="meta">当前价参考：请选择 EA 或等待快照。</div>
             <select id="opOrderType" class="select">
+              <option value="auto">自动判断 Limit / Stop</option>
               <option value="buy_limit">Buy Limit</option>
-              <option value="sell_limit">Sell Limit</option>
               <option value="buy_stop">Buy Stop</option>
+              <option value="sell_limit">Sell Limit</option>
               <option value="sell_stop">Sell Stop</option>
             </select>
             <input id="opPrice" class="input" type="number" step="0.01" placeholder="挂单价格" />
+            <div id="pendingTypeHint" class="meta">填写挂单价格后，将按当前价自动判断挂单类型。</div>
           </div>
           <div class="op-fields" data-op-fields="close_ticket cancel_order">
             <input id="opTicket" class="input" type="text" placeholder="订单号 / 挂单 ticket；留空则用卡片 payload ticket" />
@@ -577,6 +580,11 @@
     const closeSelectedPositionsBtn = document.getElementById("closeSelectedPositionsBtn");
     const cancelSelectedOrdersBtn = document.getElementById("cancelSelectedOrdersBtn");
     const clearOrderSelectionBtn = document.getElementById("clearOrderSelectionBtn");
+    const opSideEl = document.getElementById("opSide");
+    const opOrderTypeEl = document.getElementById("opOrderType");
+    const opPriceEl = document.getElementById("opPrice");
+    const marketPriceHintEl = document.getElementById("marketPriceHint");
+    const pendingTypeHintEl = document.getElementById("pendingTypeHint");
     const urlFilterBanner = document.getElementById("urlFilterBanner");
     const summaryFilterBanner = document.getElementById("summaryFilterBanner");
     const summaryFilterText = document.getElementById("summaryFilterText");
@@ -844,6 +852,10 @@
         current_order_count: currentOrderCount,
         equity: ea.equity,
         snapshot_profit: ea.snapshot_profit,
+        market_symbol: ea.market_symbol,
+        market_bid: ea.market_bid,
+        market_ask: ea.market_ask,
+        market_last: ea.market_last,
         last_seen_at: ea.last_seen_at,
         positions: [],
         pending_orders: [],
@@ -1201,12 +1213,79 @@
       const n = Number(raw);
       return Number.isFinite(n) ? n : NaN;
     }
+    function selectedReferenceRows() {
+      const selected = selectedRows();
+      return selected.length ? selected : visibleRows().filter(canTradeRow);
+    }
+    function rowReferencePrice(row, side = opSideEl.value) {
+      const ask = Number(row.market_ask);
+      const bid = Number(row.market_bid);
+      const last = Number(row.market_last);
+      if (side === "buy" && Number.isFinite(ask) && ask > 0) return ask;
+      if (side === "sell" && Number.isFinite(bid) && bid > 0) return bid;
+      if (Number.isFinite(last) && last > 0) return last;
+      if (Number.isFinite(ask) && ask > 0) return ask;
+      if (Number.isFinite(bid) && bid > 0) return bid;
+      return null;
+    }
+    function primaryReferenceRow() {
+      return selectedReferenceRows().find((row) => rowReferencePrice(row) !== null) || null;
+    }
+    function inferPendingOrderType(side, price, referencePrice) {
+      if (!Number.isFinite(price) || !Number.isFinite(referencePrice) || price <= 0 || referencePrice <= 0) return "";
+      if (side === "buy") return price < referencePrice ? "buy_limit" : "buy_stop";
+      if (side === "sell") return price > referencePrice ? "sell_limit" : "sell_stop";
+      return "";
+    }
+    function orderTypeText(type) {
+      const map = {
+        auto: "自动判断 Limit / Stop",
+        buy_limit: "Buy Limit",
+        buy_stop: "Buy Stop",
+        sell_limit: "Sell Limit",
+        sell_stop: "Sell Stop",
+      };
+      return map[type] || type || "-";
+    }
+    function updatePendingOrderTypeOptions() {
+      const side = opSideEl.value || "buy";
+      [...opOrderTypeEl.options].forEach((option) => {
+        option.hidden = option.value !== "auto" && !option.value.startsWith(side + "_");
+      });
+      if (opOrderTypeEl.value !== "auto" && !opOrderTypeEl.value.startsWith(side + "_")) {
+        opOrderTypeEl.value = "auto";
+      }
+    }
+    function updatePendingOrderHints() {
+      updatePendingOrderTypeOptions();
+      const row = primaryReferenceRow();
+      const side = opSideEl.value || "buy";
+      const referencePrice = row ? rowReferencePrice(row, side) : null;
+      const price = Number(opPriceEl.value);
+      if (row && referencePrice !== null) {
+        marketPriceHintEl.textContent = `当前价参考：${row.ea_id} · ${row.market_symbol || row.symbol || "-"} · ${side === "buy" ? "Ask" : "Bid"} ${fmtNum(referencePrice)}`;
+      } else {
+        marketPriceHintEl.textContent = "当前价参考：请选择有最新快照价格的 EA。";
+      }
+      if (!Number.isFinite(price) || price <= 0) {
+        pendingTypeHintEl.textContent = "填写挂单价格后，将按当前价自动判断挂单类型。";
+        return;
+      }
+      if (referencePrice === null) {
+        pendingTypeHintEl.textContent = "当前价缺失，自动判断不可用，请手动选择挂单类型。";
+        return;
+      }
+      const inferred = inferPendingOrderType(side, price, referencePrice);
+      const distance = Math.abs(price - referencePrice);
+      pendingTypeHintEl.textContent = `自动判断：${orderTypeText(inferred)}；距离当前参考价 ${fmtNum(distance)}`;
+    }
     function updateOperationFields() {
       const op = bulkCommandTypeEl.value;
       document.querySelectorAll("[data-op-fields]").forEach((el) => {
         const ops = String(el.dataset.opFields || "").split(/\s+/);
         el.classList.toggle("show", ops.includes(op));
       });
+      updatePendingOrderHints();
     }
     function commandTypeForOperation(operation) {
       if (operation === "open_market" || operation === "open_pending") return "open_order";
@@ -1270,10 +1349,21 @@
       if (operation === "open_pending") {
         const price = opNumber("opPrice");
         if (!Number.isFinite(price) || price <= 0) throw new Error("挂单价格必须大于 0。");
+        let orderType = opText("opOrderType") || "auto";
+        if (orderType === "auto") {
+          const referencePrice = rowReferencePrice(row, side);
+          orderType = inferPendingOrderType(side, price, referencePrice);
+          if (!orderType) throw new Error(`${row.ea_id} 缺少当前价，无法自动判断挂单类型，请手动选择 Limit/Stop。`);
+        }
         payload.order_mode = "pending";
         payload.pending_order = true;
-        payload.order_type = opText("opOrderType") || "buy_limit";
+        payload.order_type = orderType;
         payload.price = price;
+        const referencePrice = rowReferencePrice(row, side);
+        if (referencePrice !== null) {
+          payload.reference_price = referencePrice;
+          payload.reference_symbol = row.market_symbol || row.symbol || symbol;
+        }
       }
       if (operation === "update_params") {
         const fields = [
@@ -1306,6 +1396,7 @@
       if (payload.volume !== undefined) fields.push(`手数=${payload.volume}`);
       if (payload.order_type) fields.push(`挂单类型=${payload.order_type}`);
       if (payload.price !== undefined) fields.push(`价格=${payload.price}`);
+      if (payload.reference_price !== undefined) fields.push(`参考价=${payload.reference_price}`);
       if (payload.ticket) fields.push(`ticket=${payload.ticket}`);
       if (Array.isArray(payload.tickets)) fields.push(`tickets=${payload.tickets.join(",")}`);
       if (payload.max_slippage_points !== undefined) fields.push(`最大滑点=${payload.max_slippage_points}`);
@@ -1516,6 +1607,9 @@
     });
     statusFilterEl.addEventListener("change", render);
     searchBoxEl.addEventListener("input", render);
+    opSideEl.addEventListener("change", updatePendingOrderHints);
+    opOrderTypeEl.addEventListener("change", updatePendingOrderHints);
+    opPriceEl.addEventListener("input", updatePendingOrderHints);
     document.querySelectorAll("[data-summary-filter]").forEach((card) => {
       card.addEventListener("click", () => {
         const nextFilter = card.dataset.summaryFilter || "all";
@@ -1587,6 +1681,7 @@
       const card = target.closest(".trade-card");
       if (card) card.classList.toggle("selected", target.checked);
       updateSelectionUi();
+      updatePendingOrderHints();
     });
     grid.addEventListener("click", (event) => {
       const button = event.target instanceof HTMLElement ? event.target.closest("[data-quick-op]") : null;
