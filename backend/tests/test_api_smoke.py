@@ -694,6 +694,7 @@ def test_snapshot_stores_pending_orders_and_admin_can_read_them(client: TestClie
                     "sl": 5000,
                     "tp": 4700,
                     "state": "placed",
+                    "raw": {"magic": 20260509, "comment": "EAControlCenter", "source": "central_manual"},
                 }
             ],
         },
@@ -708,6 +709,7 @@ def test_snapshot_stores_pending_orders_and_admin_can_read_them(client: TestClie
     assert len(body) == 1
     assert body[0]["ticket"] == "509150886"
     assert body[0]["order_type"] == "sell_limit"
+    assert body[0]["raw"]["source"] == "central_manual"
 
     dashboard_rows = client.get("/api/admin/dashboard/eas", headers={"X-Admin-Token": "test_admin_token"})
     assert dashboard_rows.status_code == 200
@@ -1235,6 +1237,9 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert '<option value="3000">3 秒</option>' in r.text
     assert "onlineStatusText" in r.text
     assert "enrichRowsWithPositions" in r.text
+    assert "attachCentralOrderCounts" in r.text
+    assert "isCentralManualOrder" in r.text
+    assert "central_manual" in r.text
     assert "/positions" in r.text
     assert "/pending-orders" in r.text
     assert "matchingPositionForRow" in r.text

@@ -268,6 +268,7 @@ class PositionOut(BaseModel):
     sl: Decimal | None
     tp: Decimal | None
     profit: Decimal | None
+    raw: dict[str, Any] | None = None
     updated_at: datetime
 
 
@@ -283,6 +284,7 @@ class PendingOrderOut(BaseModel):
     sl: Decimal | None
     tp: Decimal | None
     state: str | None
+    raw: dict[str, Any] | None = None
     updated_at: datetime
 
 

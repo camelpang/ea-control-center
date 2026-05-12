@@ -438,7 +438,7 @@
         <input id="searchBox" class="input" type="search" placeholder="搜索 EA / 账号 / 品种" style="min-width: 220px;" />
       </div>
       <div class="meta" style="margin-top: 10px;">
-        识别规则：`open_order` 视为人工建仓；payload 中 `order_mode=pending`、`pending_order=true` 或挂单型 `order_type` 视为挂单建仓；最新恢复交易命令晚于人工建仓时标记为已恢复自动。
+        识别规则：人工页默认只展示中央系统人工命令，或快照中标记为 `central_manual` / `EAControlCenter` 的订单；策略 EA 自己开的订单只计入总持仓，不默认归为人工订单。
       </div>
       <div id="urlFilterBanner" class="filter-banner"></div>
       <div id="msg" class="message"></div>
@@ -833,9 +833,41 @@
     function activeCommandsFor(eaCommands) {
       return eaCommands.filter((command) => ["pending", "received", "executing"].includes(command.status));
     }
+    function orderRaw(order) {
+      return order && typeof order.raw === "object" && order.raw !== null ? order.raw : {};
+    }
+    function isCentralManualOrder(order) {
+      const raw = orderRaw(order);
+      const source = String(raw.source || raw.order_source || "").toLowerCase();
+      const comment = String(raw.comment || "").toLowerCase();
+      const magic = String(raw.magic ?? "");
+      return source === "central_manual"
+        || source === "manual"
+        || comment.includes("eacontrolcenter")
+        || magic === "20260509";
+    }
+    function hasCentralManualOrders(ea) {
+      return Number(ea.central_positions_count || 0) + Number(ea.central_pending_orders_count || 0) > 0;
+    }
+    async function attachCentralOrderCounts(eas) {
+      await Promise.allSettled(eas.map(async (ea) => {
+        if (!(Number(ea.positions_count || 0) > 0 || Number(ea.pending_orders_count || 0) > 0)) {
+          ea.central_positions_count = 0;
+          ea.central_pending_orders_count = 0;
+          return;
+        }
+        const [positions, pendingOrders] = await Promise.all([
+          api(`/api/admin/eas/${encodeURIComponent(ea.ea_id)}/positions`),
+          api(`/api/admin/eas/${encodeURIComponent(ea.ea_id)}/pending-orders`),
+        ]);
+        ea.central_positions_count = (positions || []).filter(isCentralManualOrder).length;
+        ea.central_pending_orders_count = (pendingOrders || []).filter(isCentralManualOrder).length;
+      }));
+    }
     function rowFromEa(ea, eaCommands, manualCommand = null) {
       const payload = payloadOf(manualCommand);
-      const currentOrderCount = Number(ea.positions_count || 0) + Number(ea.pending_orders_count || 0);
+      const currentOrderCount = Number(ea.central_positions_count ?? ea.positions_count ?? 0) + Number(ea.central_pending_orders_count ?? ea.pending_orders_count ?? 0);
+      const totalOrderCount = Number(ea.positions_count || 0) + Number(ea.pending_orders_count || 0);
       const hasCurrentOrders = currentOrderCount > 0;
       const cls = manualCommand
         ? classifyTrade(manualCommand, eaCommands, hasCurrentOrders)
@@ -859,7 +891,10 @@
         assigned_users: ea.assigned_users || [],
         positions_count: ea.positions_count,
         pending_orders_count: ea.pending_orders_count || 0,
+        central_positions_count: ea.central_positions_count ?? 0,
+        central_pending_orders_count: ea.central_pending_orders_count ?? 0,
         current_order_count: currentOrderCount,
+        total_order_count: totalOrderCount,
         equity: ea.equity,
         snapshot_profit: ea.snapshot_profit,
         market_symbol: ea.market_symbol,
@@ -909,7 +944,7 @@
         eaCommands.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         const manualCommand = eaCommands.find(isManualOpenCommand);
         const ea = eaMap.get(eaId) || {};
-        if (!manualCommand && !(ea.positions_count > 0 || ea.pending_orders_count > 0)) continue;
+        if (!manualCommand && !hasCentralManualOrders(ea)) continue;
         if (manualCommand?.command_type === "manual_release") continue;
         result.push(rowFromEa({ ...ea, ea_id: eaId }, eaCommands, manualCommand));
       }
@@ -1010,8 +1045,17 @@
       for (const row of targetRows) {
         const positions = positionsByEa.get(row.ea_id) || [];
         const pendingOrders = pendingOrdersByEa.get(row.ea_id) || [];
-        row.positions = positions;
-        row.pending_orders = pendingOrders;
+        const centralPositions = positions.filter(isCentralManualOrder);
+        const centralPendingOrders = pendingOrders.filter(isCentralManualOrder);
+        row.all_positions = positions;
+        row.all_pending_orders = pendingOrders;
+        row.positions = hasUrlFilter() ? positions : centralPositions;
+        row.pending_orders = hasUrlFilter() ? pendingOrders : centralPendingOrders;
+        row.central_positions_count = centralPositions.length;
+        row.central_pending_orders_count = centralPendingOrders.length;
+        if (!hasUrlFilter() && !row.manual_command) {
+          row.current_order_count = centralPositions.length + centralPendingOrders.length;
+        }
         if (!row.current_order_count) {
           row.ticket = "";
           continue;
@@ -1201,6 +1245,7 @@
           api("/api/admin/dashboard/eas"),
           api("/api/admin/commands?limit=500"),
         ]);
+        await attachCentralOrderCounts(eas);
         rows = buildRows(eas, commands);
         await enrichRowsWithPositions(rows);
         pruneOrderSelections();
