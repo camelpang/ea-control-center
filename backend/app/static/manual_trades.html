@@ -204,6 +204,8 @@
       opacity: 0.78;
     }
     .trade-card.pending { border-color: rgba(234, 179, 8, 0.55); }
+    .trade-card.position { border-color: rgba(20, 184, 166, 0.55); }
+    .trade-card.strategy { border-color: rgba(148, 163, 184, 0.42); }
     .trade-card.restored { opacity: 0.82; }
     .trade-header {
       display: flex;
@@ -242,6 +244,7 @@
     .badge.pending { background: rgba(234, 179, 8, 0.18); color: #fde047; }
     .badge.managed { background: rgba(168, 85, 247, 0.18); color: #d8b4fe; }
     .badge.position { background: rgba(20, 184, 166, 0.18); color: #5eead4; }
+    .badge.strategy { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; }
     .badge.active { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
     .badge.restored { background: rgba(34, 197, 94, 0.18); color: #86efac; }
     .badge.progress { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
@@ -257,6 +260,107 @@
     }
     .metrics dt { margin: 0; color: var(--muted); }
     .metrics dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+    .command-flow {
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px solid rgba(30, 58, 95, 0.72);
+      border-radius: 12px;
+      background: rgba(7, 11, 20, 0.28);
+    }
+    .command-flow-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .command-flow-steps {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .command-step {
+      border: 1px solid rgba(30, 58, 95, 0.72);
+      border-radius: 999px;
+      padding: 5px 6px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 11px;
+    }
+    .command-step.done {
+      border-color: rgba(34, 197, 94, 0.46);
+      background: rgba(34, 197, 94, 0.12);
+      color: #86efac;
+    }
+    .command-step.current {
+      border-color: rgba(59, 130, 246, 0.58);
+      background: rgba(59, 130, 246, 0.14);
+      color: #bfdbfe;
+    }
+    .command-step.issue {
+      border-color: rgba(239, 68, 68, 0.62);
+      background: rgba(239, 68, 68, 0.14);
+      color: #fecaca;
+    }
+    .command-flow-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .command-flow.issue .command-flow-note { color: #fecaca; }
+    .command-flow.pending .command-flow-note,
+    .command-flow.executing .command-flow-note { color: #bfdbfe; }
+    .credibility-panel {
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px solid rgba(30, 58, 95, 0.72);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.36);
+    }
+    .credibility-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .credibility-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .credibility-item {
+      border: 1px solid rgba(30, 58, 95, 0.68);
+      border-radius: 10px;
+      padding: 7px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .credibility-item strong {
+      display: block;
+      margin-bottom: 3px;
+      color: #cbd5e1;
+    }
+    .credibility-item.ok {
+      border-color: rgba(34, 197, 94, 0.42);
+      background: rgba(34, 197, 94, 0.08);
+    }
+    .credibility-item.watch {
+      border-color: rgba(234, 179, 8, 0.42);
+      background: rgba(234, 179, 8, 0.08);
+      color: #fde68a;
+    }
+    .credibility-item.bad {
+      border-color: rgba(239, 68, 68, 0.5);
+      background: rgba(239, 68, 68, 0.1);
+      color: #fecaca;
+    }
     .order-section {
       margin-top: 12px;
       padding-top: 12px;
@@ -312,9 +416,99 @@
       gap: 8px;
       margin-top: 8px;
     }
+    .strategy-details {
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px dashed rgba(148, 163, 184, 0.45);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.42);
+    }
+    .strategy-details summary {
+      cursor: pointer;
+      color: #cbd5e1;
+      font-weight: 800;
+    }
+    .strategy-details .order-item {
+      opacity: 0.84;
+    }
+    .order-source-note {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
     .button.small {
       padding: 6px 9px;
       font-size: 12px;
+    }
+    .task-group {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid rgba(30, 58, 95, 0.72);
+      border-radius: 14px;
+      background: rgba(7, 11, 20, 0.24);
+    }
+    .task-group h3 {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 0.9rem;
+    }
+    .task-buttons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .task-buttons .button {
+      width: 100%;
+      justify-content: center;
+      text-align: center;
+    }
+    .button.active-task {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.36);
+      color: #bae6fd;
+    }
+    .task-hint {
+      padding: 10px;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 12px;
+      background: rgba(14, 165, 233, 0.1);
+      color: #bae6fd;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .risk-zone {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      border-radius: 14px;
+      background: rgba(127, 29, 29, 0.16);
+    }
+    .advanced-zone {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.36);
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.42);
+    }
+    .advanced-zone summary {
+      cursor: pointer;
+      color: #cbd5e1;
+      font-weight: 800;
+    }
+    .advanced-zone .task-buttons {
+      margin-top: 10px;
+    }
+    .risk-zone summary {
+      cursor: pointer;
+      color: #fecaca;
+      font-weight: 800;
+    }
+    .risk-zone .meta {
+      color: #fecaca;
+    }
+    .hidden-command-select {
+      display: none;
     }
     .payload {
       max-height: 108px;
@@ -428,9 +622,11 @@
         <input id="adminToken" class="input" type="password" placeholder="X-Admin-Token（可选）" style="max-width: 280px;" />
         <button id="saveTokenBtn" class="button" type="button">保存 Token</button>
         <select id="statusFilter" class="select">
-          <option value="all">全部人工介入</option>
+          <option value="all">全部在线 / 人工相关 EA</option>
           <option value="active">仍在人工管理</option>
           <option value="managed">人工管理标记</option>
+          <option value="central">中央人工订单</option>
+          <option value="strategy">策略订单</option>
           <option value="pending">挂单建仓</option>
           <option value="market">手动市价建仓</option>
           <option value="restored">已恢复自动</option>
@@ -438,7 +634,7 @@
         <input id="searchBox" class="input" type="search" placeholder="搜索 EA / 账号 / 品种" style="min-width: 220px;" />
       </div>
       <div class="meta" style="margin-top: 10px;">
-        识别规则：人工页默认只展示中央系统人工命令，或快照中标记为 `central_manual` / `EAControlCenter` 的订单；策略 EA 自己开的订单只计入总持仓，不默认归为人工订单。
+        工作台默认显示在线 EA、人工相关 EA 和有未完成命令的 EA；卡片内区分策略订单与中央人工订单，默认批量操作只选择中央人工订单。
       </div>
       <div id="urlFilterBanner" class="filter-banner"></div>
       <div id="msg" class="message"></div>
@@ -447,9 +643,10 @@
     <div class="content-layout">
       <div class="main-column">
         <section class="summary">
-          <button class="summary-card" type="button" data-summary-filter="all"><strong id="totalCount">0</strong><span class="meta">人工接管 EA</span></button>
-          <button class="summary-card" type="button" data-summary-filter="allowed"><strong id="allowedCount">0</strong><span class="meta">允许人工 EA</span></button>
+          <button class="summary-card" type="button" data-summary-filter="all"><strong id="totalCount">0</strong><span class="meta">工作台 EA</span></button>
+          <button class="summary-card" type="button" data-summary-filter="allowed"><strong id="allowedCount">0</strong><span class="meta">允许操作 EA</span></button>
           <button class="summary-card" type="button" data-summary-filter="conflict"><strong id="conflictCount">0</strong><span class="meta">冲突命令</span></button>
+          <button class="summary-card" type="button" data-summary-filter="central"><strong id="centralCount">0</strong><span class="meta">中央人工订单</span></button>
           <button class="summary-card" type="button" data-summary-filter="restored"><strong id="restoredCount">0</strong><span class="meta">已恢复自动</span></button>
         </section>
         <div id="summaryFilterBanner" class="summary-filter-banner">
@@ -458,7 +655,7 @@
         </div>
 
         <section id="grid" class="grid">
-          <div class="empty">正在加载人工建仓记录...</div>
+          <div class="empty">正在加载人工操作工作台...</div>
         </section>
       </div>
 
@@ -473,13 +670,40 @@
           <button id="clearSelectionBtn" class="button" type="button">清空选择</button>
         </div>
         <div class="toolbar vertical" style="margin-top: 12px;">
-          <select id="bulkCommandType" class="select">
+          <div class="task-group">
+            <h3>日常操作</h3>
+            <div class="task-buttons">
+              <button class="button" type="button" data-task-op="pause_trading">暂停 EA</button>
+              <button class="button" type="button" data-task-op="resume_trading">恢复自动</button>
+              <button class="button" type="button" data-task-op="manual_manage">标记人工管理</button>
+              <button class="button danger" type="button" data-task-op="close_central_positions">平中央人工持仓</button>
+              <button class="button danger" type="button" data-task-op="cancel_central_orders">取消中央人工挂单</button>
+            </div>
+            <div class="meta">日常区只处理 EA 状态和中央人工订单，不会默认选择策略订单。</div>
+          </div>
+          <div class="task-group">
+            <h3>人工开仓</h3>
+            <div class="task-buttons">
+              <button class="button danger" type="button" data-task-op="open_market">市价建仓</button>
+              <button class="button danger" type="button" data-task-op="open_pending">挂单建仓</button>
+            </div>
+          </div>
+          <details class="advanced-zone">
+            <summary>高级操作（按品种、ticket、参数）</summary>
+            <div class="meta" style="margin-top: 8px;">仅在需要按具体品种、ticket 或运行参数处理时使用；日常操作优先使用上方 7 个按钮。</div>
+            <div class="task-buttons">
+              <button class="button" type="button" data-task-op="close_symbol">按品种平仓</button>
+              <button class="button" type="button" data-task-op="close_ticket">按订单号平仓</button>
+              <button class="button" type="button" data-task-op="cancel_order">取消指定挂单</button>
+              <button class="button" type="button" data-task-op="update_params">更新运行参数</button>
+            </div>
+          </details>
+          <select id="bulkCommandType" class="select hidden-command-select" aria-hidden="true" tabindex="-1">
             <option value="resume_trading">恢复自动</option>
             <option value="pause_trading">暂停 EA</option>
             <option value="manual_manage">标记人工管理</option>
             <option value="open_market">市价建仓</option>
             <option value="open_pending">挂单建仓</option>
-            <option value="close_all">全部平仓</option>
             <option value="close_symbol">按各自品种平仓</option>
             <option value="close_ticket">按订单号平仓</option>
             <option value="cancel_order">取消挂单</option>
@@ -487,6 +711,7 @@
           </select>
           <input id="bulkRequestedBy" class="input" type="text" value="manual-trades-ui" placeholder="操作人" />
           <input id="bulkReason" class="input" type="text" placeholder="原因/备注（可选）" />
+          <div id="taskHint" class="task-hint">先选择 EA，再点击右侧任务按钮；需要填写参数的任务会在这里显示输入框。</div>
           <div class="op-fields" data-op-fields="open_market open_pending close_symbol">
             <input id="opSymbol" class="input" type="text" value="XAUUSD" placeholder="交易品种，如 XAUUSD；平仓留空则用卡片品种" />
           </div>
@@ -515,9 +740,6 @@
           <div class="op-fields" data-op-fields="close_ticket cancel_order">
             <input id="opTicket" class="input" type="text" placeholder="订单号 / 挂单 ticket；留空则用卡片 payload ticket" />
           </div>
-          <div class="op-fields" data-op-fields="close_all">
-            <input id="opSlippage" class="input" type="number" min="0" step="1" placeholder="最大滑点（点，可选）" />
-          </div>
           <div class="op-fields" data-op-fields="update_params">
             <input id="opHeartbeat" class="input" type="number" min="1" step="1" placeholder="心跳间隔秒" />
             <input id="opSnapshot" class="input" type="number" min="1" step="1" placeholder="快照间隔秒" />
@@ -528,12 +750,22 @@
           <div id="operationMsg" class="message"></div>
         </div>
         <div class="toolbar vertical" style="margin-top: 12px;">
-          <span id="selectedOrdersCount" class="meta">已选择 0 个持仓 / 0 个挂单</span>
-          <button id="closeSelectedPositionsBtn" class="button danger" type="button">批量平选中持仓</button>
-          <button id="cancelSelectedOrdersBtn" class="button danger" type="button">批量取消选中挂单</button>
-          <button id="clearOrderSelectionBtn" class="button" type="button">清空订单选择</button>
+          <details class="advanced-zone">
+            <summary>精细选择订单</summary>
+            <div class="meta" style="margin-top: 8px;">用于只处理勾选的中央人工订单；策略订单仍只读。</div>
+            <span id="selectedOrdersCount" class="meta">已选择 0 个持仓 / 0 个挂单</span>
+            <button id="closeSelectedPositionsBtn" class="button danger" type="button">批量平选中持仓</button>
+            <button id="cancelSelectedOrdersBtn" class="button danger" type="button">批量取消选中挂单</button>
+            <button id="clearOrderSelectionBtn" class="button" type="button">清空订单选择</button>
+          </details>
         </div>
-        <div class="meta" style="margin-top: 10px; line-height: 1.55;">所有命令都从右侧统一下发；品种/订单号留空时优先使用所选卡片记录；市价建仓和挂单建仓会进入人工管理分类。</div>
+        <details class="risk-zone">
+          <summary>风险处置：全平所有订单</summary>
+          <div class="meta" style="margin-top: 8px; line-height: 1.55;">仅用于紧急风险处置。此操作会对选中 EA 下发“全平该 EA 所有订单（含策略订单）”，可能影响正在运行的策略逻辑。</div>
+          <input id="opSlippage" class="input" type="number" min="0" step="1" placeholder="最大滑点（点，可选）" style="margin-top: 10px;" />
+          <button id="closeAllRiskBtn" class="button danger" type="button" style="margin-top: 10px;">全平所选 EA 所有订单（含策略）</button>
+        </details>
+        <div class="meta" style="margin-top: 10px; line-height: 1.55;">日常按钮按任务下发；品种/订单号留空时优先使用所选卡片记录；市价建仓和挂单建仓会进入人工管理分类。</div>
       </aside>
     </div>
   </main>
@@ -582,9 +814,11 @@
     const closeSelectedPositionsBtn = document.getElementById("closeSelectedPositionsBtn");
     const cancelSelectedOrdersBtn = document.getElementById("cancelSelectedOrdersBtn");
     const clearOrderSelectionBtn = document.getElementById("clearOrderSelectionBtn");
+    const closeAllRiskBtn = document.getElementById("closeAllRiskBtn");
     const opSideEl = document.getElementById("opSide");
     const opOrderTypeEl = document.getElementById("opOrderType");
     const opPriceEl = document.getElementById("opPrice");
+    const taskHintEl = document.getElementById("taskHint");
     const marketPriceHintEl = document.getElementById("marketPriceHint");
     const pendingTypeHintEl = document.getElementById("pendingTypeHint");
     const urlFilterBanner = document.getElementById("urlFilterBanner");
@@ -609,6 +843,8 @@
     let timer = null;
     let pendingConfirmResolve = null;
     let summaryFilter = "all";
+    let activeTaskOperation = "resume_trading";
+    const parameterTaskOperations = new Set(["open_market", "open_pending", "close_symbol", "close_ticket", "cancel_order", "update_params"]);
     const urlParams = new URLSearchParams(window.location.search);
     const urlFilter = {
       status: urlParams.get("status") || "",
@@ -642,6 +878,11 @@
         operationMsg.textContent = text;
         operationMsg.className = "message show " + type;
       }
+    }
+    function showOperationMsg(text, type = "err") {
+      if (!operationMsg) return showMsg(text, type);
+      operationMsg.textContent = text;
+      operationMsg.className = "message show " + type;
     }
     function clearMsg() {
       msg.className = "message";
@@ -743,10 +984,12 @@
       const map = {
         pause_trading: "暂停交易",
         resume_trading: "恢复交易",
-        close_all: "全部平仓",
+        close_all: "全平所有订单（含策略）",
         close_symbol: "按品种平仓",
         close_ticket: "按订单号平仓",
         cancel_order: "取消挂单",
+        close_central_positions: "平中央人工订单",
+        cancel_central_orders: "取消中央人工挂单",
         manual_manage: "加入人工管理",
         manual_release: "移出人工管理页面",
         open_market: "市价建仓",
@@ -755,6 +998,91 @@
         update_params: "更新参数",
       };
       return map[type] || type || "-";
+    }
+    function commandStatusText(status) {
+      const map = {
+        pending: "已发送，等待 EA 领取",
+        received: "EA 已领取",
+        executing: "EA 执行中",
+        success: "执行成功",
+        failed: "执行失败",
+        timeout: "执行超时",
+        cancelled: "已取消",
+      };
+      return map[status] || status || "无命令";
+    }
+    function commandStatusLevel(status) {
+      if (["failed", "timeout", "cancelled"].includes(String(status))) return "issue";
+      if (["pending", "received", "executing"].includes(String(status))) return String(status);
+      if (status === "success") return "success";
+      return "idle";
+    }
+    function commandProgressIndex(status) {
+      const map = {
+        pending: 0,
+        received: 1,
+        executing: 2,
+        success: 3,
+        failed: 3,
+        timeout: 3,
+        cancelled: 3,
+      };
+      return map[status] ?? -1;
+    }
+    function latestCommandMessage(command) {
+      if (!command) return "";
+      if (command.error_message) return command.error_message;
+      const logs = Array.isArray(command.logs) ? command.logs : [];
+      const latestLog = logs.length ? logs[logs.length - 1] : null;
+      return latestLog?.message || "";
+    }
+    function ageSeconds(value) {
+      if (!value) return null;
+      const ts = new Date(value).getTime();
+      if (!Number.isFinite(ts)) return null;
+      return Math.max(0, Math.round((Date.now() - ts) / 1000));
+    }
+    function ageText(value) {
+      const seconds = ageSeconds(value);
+      if (seconds === null) return "无数据";
+      if (seconds < 60) return `${seconds}s 前`;
+      const minutes = Math.round(seconds / 60);
+      if (minutes < 60) return `${minutes}m 前`;
+      const hours = Math.round(minutes / 60);
+      return `${hours}h 前`;
+    }
+    function statusByAge(value, warnSec, badSec) {
+      const seconds = ageSeconds(value);
+      if (seconds === null) return "bad";
+      if (seconds > badSec) return "bad";
+      if (seconds > warnSec) return "watch";
+      return "ok";
+    }
+    function commandReceiptStatus(command) {
+      if (!command || !command.command_type) return { level: "watch", text: "暂无命令回执" };
+      const status = String(command.status || "");
+      if (["failed", "timeout", "cancelled"].includes(status)) return { level: "bad", text: commandStatusText(status) };
+      if (["pending", "received", "executing"].includes(status)) return { level: "watch", text: commandStatusText(status) };
+      return { level: "ok", text: commandStatusText(status) };
+    }
+    function credibilitySummary(row) {
+      const heartbeat = statusByAge(row.last_seen_at, 60, 180);
+      const snapshot = statusByAge(row.latest_snapshot_at, 120, 300);
+      const receipt = commandReceiptStatus(row.latest_command);
+      const version = row.version ? { level: "ok", text: row.version } : { level: "watch", text: "未上报版本" };
+      const levels = [heartbeat, snapshot, receipt.level, version.level];
+      const level = levels.includes("bad") ? "bad" : (levels.includes("watch") ? "watch" : "ok");
+      const text = level === "ok" ? "可信" : (level === "watch" ? "需关注" : "异常");
+      return {
+        level,
+        text,
+        items: [
+          { label: "心跳", level: heartbeat, text: ageText(row.last_seen_at) },
+          { label: "快照", level: snapshot, text: ageText(row.latest_snapshot_at) },
+          { label: "命令回执", level: receipt.level, text: receipt.text },
+          { label: "EA版本", level: version.level, text: version.text },
+        ],
+      };
     }
     function onlineStatusClass(status) {
       const value = String(status || "").toLowerCase();
@@ -849,6 +1177,17 @@
     function hasCentralManualOrders(ea) {
       return Number(ea.central_positions_count || 0) + Number(ea.central_pending_orders_count || 0) > 0;
     }
+    function strategyOrderCount(row) {
+      const total = Number(row.total_order_count ?? (Number(row.positions_count || 0) + Number(row.pending_orders_count || 0)));
+      const central = Number(row.current_order_count || 0);
+      return Math.max(0, total - central);
+    }
+    function shouldShowInDefaultWorkbench(ea, eaCommands) {
+      return ea.status === "online"
+        || Boolean(eaCommands.find(isManualOpenCommand))
+        || hasCentralManualOrders(ea)
+        || activeCommandsFor(eaCommands).length > 0;
+    }
     async function attachCentralOrderCounts(eas) {
       await Promise.allSettled(eas.map(async (ea) => {
         if (!(Number(ea.positions_count || 0) > 0 || Number(ea.pending_orders_count || 0) > 0)) {
@@ -869,15 +1208,18 @@
       const currentOrderCount = Number(ea.central_positions_count ?? ea.positions_count ?? 0) + Number(ea.central_pending_orders_count ?? ea.pending_orders_count ?? 0);
       const totalOrderCount = Number(ea.positions_count || 0) + Number(ea.pending_orders_count || 0);
       const hasCurrentOrders = currentOrderCount > 0;
+      const hasStrategyOrders = totalOrderCount > currentOrderCount;
       const cls = manualCommand
         ? classifyTrade(manualCommand, eaCommands, hasCurrentOrders)
         : (hasCurrentOrders
           ? {
               state: "active",
-              stateText: ea.positions_count > 0 ? "持仓中" : "挂单中",
-              tradeType: ea.positions_count > 0 ? "position" : "pending",
+              stateText: ea.central_positions_count > 0 ? "人工持仓中" : "人工挂单中",
+              tradeType: ea.central_positions_count > 0 ? "position" : "pending",
             }
-          : { state: "normal", stateText: "全局筛选", tradeType: "managed" });
+          : (hasStrategyOrders
+            ? { state: "normal", stateText: "策略订单只读", tradeType: "strategy" }
+            : { state: "normal", stateText: ea.status === "online" ? "在线待操作" : "全局筛选", tradeType: "managed" }));
       const latestCommand = eaCommands[0] || {};
       return {
         ea_id: ea.ea_id,
@@ -917,7 +1259,7 @@
         tradeType: cls.tradeType,
         tradeTypeText: manualCommand
           ? (cls.tradeType === "pending" ? "挂单建仓" : (cls.tradeType === "managed" ? "人工管理" : "手动市价建仓"))
-          : (cls.tradeType === "position" ? "当前持仓" : (cls.tradeType === "pending" ? "当前挂单" : "全局 EA")),
+          : (cls.tradeType === "position" ? "中央人工持仓" : (cls.tradeType === "pending" ? "中央人工挂单" : (cls.tradeType === "strategy" ? "策略订单只读" : "在线 EA"))),
       };
     }
     function buildRows(eas, commands) {
@@ -944,8 +1286,7 @@
         eaCommands.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         const manualCommand = eaCommands.find(isManualOpenCommand);
         const ea = eaMap.get(eaId) || {};
-        if (!manualCommand && !hasCentralManualOrders(ea)) continue;
-        if (manualCommand?.command_type === "manual_release") continue;
+        if (!shouldShowInDefaultWorkbench(ea, eaCommands)) continue;
         result.push(rowFromEa({ ...ea, ea_id: eaId }, eaCommands, manualCommand));
       }
       return result.sort((a, b) => {
@@ -1023,8 +1364,109 @@
         </div>
       `).join("")}</div>`;
     }
+    function renderCommandFlow(row) {
+      const command = row.latest_command;
+      if (!command || !command.command_type) {
+        return `
+          <section class="command-flow">
+            <div class="command-flow-header">
+              <span>最近命令</span>
+              <span class="meta">暂无</span>
+            </div>
+            <div class="command-flow-note">该 EA 暂无最近命令记录。</div>
+          </section>
+        `;
+      }
+      const status = String(command.status || "");
+      const level = commandStatusLevel(status);
+      const progress = commandProgressIndex(status);
+      const steps = ["已发送", "EA已领取", "执行中", "已结束"];
+      const message = latestCommandMessage(command);
+      const noteParts = [
+        `#${command.id}`,
+        commandText(command.command_type),
+        commandStatusText(status),
+        `更新：${fmtDate(command.updated_at || command.completed_at || command.created_at)}`,
+      ];
+      if (message) noteParts.push(message);
+      return `
+        <section class="command-flow ${escapeHtml(level)}">
+          <div class="command-flow-header">
+            <span>最近命令闭环</span>
+            <span>${escapeHtml(commandStatusText(status))}</span>
+          </div>
+          <div class="command-flow-steps">
+            ${steps.map((step, index) => {
+              const cls = index < progress ? "done" : (index === progress ? (level === "issue" ? "issue" : "current") : "");
+              return `<span class="command-step ${escapeHtml(cls)}">${escapeHtml(step)}</span>`;
+            }).join("")}
+          </div>
+          <div class="command-flow-note">${escapeHtml(noteParts.join(" · "))}</div>
+        </section>
+      `;
+    }
+    function renderCredibilityPanel(row) {
+      const summary = credibilitySummary(row);
+      return `
+        <section class="credibility-panel">
+          <div class="credibility-header">
+            <span>EA 状态可信度</span>
+            <span>${escapeHtml(summary.text)}</span>
+          </div>
+          <div class="credibility-grid">
+            ${summary.items.map((item) => `
+              <div class="credibility-item ${escapeHtml(item.level)}">
+                <strong>${escapeHtml(item.label)}</strong>
+                <span>${escapeHtml(item.text)}</span>
+              </div>
+            `).join("")}
+          </div>
+        </section>
+      `;
+    }
+    function renderStrategyReadonly(row) {
+      const strategyPositions = (row.all_positions || []).filter((position) => !isCentralManualOrder(position));
+      const strategyPendingOrders = (row.all_pending_orders || []).filter((order) => !isCentralManualOrder(order));
+      const total = strategyPositions.length + strategyPendingOrders.length;
+      if (!total) return "";
+      const positionHtml = strategyPositions.map((position) => `
+        <div class="order-item">
+          <div class="order-item-main">
+            <strong>#${escapeHtml(position.ticket)} · ${escapeHtml(position.symbol)} · ${escapeHtml(position.side)}</strong>
+            <span class="meta">${escapeHtml(position.volume ?? "-")} 手</span>
+          </div>
+          <div class="order-meta">
+            <span>类型：策略持仓</span>
+            <span>开仓价：${escapeHtml(position.open_price ?? "-")}</span>
+            <span>现价：${escapeHtml(position.current_price ?? "-")}</span>
+            <span>浮盈亏：${escapeHtml(position.profit ?? "-")}</span>
+          </div>
+        </div>
+      `).join("");
+      const pendingHtml = strategyPendingOrders.map((order) => `
+        <div class="order-item">
+          <div class="order-item-main">
+            <strong>#${escapeHtml(order.ticket)} · ${escapeHtml(order.symbol)} · ${escapeHtml(order.order_type)}</strong>
+            <span class="meta">${escapeHtml(order.volume ?? "-")} 手</span>
+          </div>
+          <div class="order-meta">
+            <span>类型：策略挂单</span>
+            <span>方向：${escapeHtml(order.side || "-")}</span>
+            <span>价格：${escapeHtml(order.price ?? "-")}</span>
+            <span>状态：${escapeHtml(order.state || "-")}</span>
+          </div>
+        </div>
+      `).join("");
+      return `
+        <details class="strategy-details">
+          <summary>查看策略订单明细（只读 ${escapeHtml(total)} 条）</summary>
+          <div class="order-source-note">策略订单默认不提供勾选框；如需紧急处理，请使用风险处置区的全平所有订单。</div>
+          <div class="order-list" style="margin-top: 8px;">${positionHtml}${pendingHtml}</div>
+        </details>
+      `;
+    }
     async function enrichRowsWithPositions(targetRows) {
-      const rowsNeedingOrderDetails = targetRows.filter((row) => row.current_order_count > 0);
+      const rowsNeedingOrderDetails = targetRows.filter((row) => row.current_order_count > 0 || strategyOrderCount(row) > 0);
       const uniqueEaIds = [...new Set(rowsNeedingOrderDetails.map((row) => row.ea_id).filter(Boolean))];
       if (!uniqueEaIds.length) return;
       const results = await Promise.allSettled(uniqueEaIds.map(async (eaId) => {
@@ -1081,9 +1523,10 @@
       if (urlFilter.risk === "paused" && row.allow_trading !== false && !["high", "watch", "paused"].includes(String(row.risk_level || ""))) return false;
       if (urlFilter.commands === "active" && !row.active_commands.length) return false;
       if (!hasUrlFilter()) {
-        if (filter === "all" && row.state === "restored" && row.current_order_count === 0) return false;
         if (filter === "active" && !["active", "progress"].includes(row.state)) return false;
         if (filter === "managed" && row.tradeType !== "managed") return false;
+        if (filter === "central" && row.current_order_count <= 0) return false;
+        if (filter === "strategy" && strategyOrderCount(row) <= 0) return false;
         if (filter === "pending" && row.tradeType !== "pending") return false;
         if (filter === "market" && row.tradeType !== "market") return false;
         if (filter === "restored" && row.state !== "restored") return false;
@@ -1095,14 +1538,16 @@
     function matchesSummaryFilter(row) {
       if (summaryFilter === "allowed") return row.allow_trading === true;
       if (summaryFilter === "conflict") return row.active_commands.length > 0;
+      if (summaryFilter === "central") return row.current_order_count > 0;
       if (summaryFilter === "restored") return row.state === "restored";
       return true;
     }
     function summaryFilterLabel(filter = summaryFilter) {
       const labels = {
-        all: "人工接管 EA",
-        allowed: "允许人工 EA",
+        all: "工作台 EA",
+        allowed: "允许操作 EA",
         conflict: "冲突命令",
+        central: "中央人工订单",
         restored: "已恢复自动",
       };
       return labels[filter] || "";
@@ -1114,6 +1559,7 @@
       document.getElementById("totalCount").textContent = baseRows.length;
       document.getElementById("allowedCount").textContent = baseRows.filter((r) => r.allow_trading === true).length;
       document.getElementById("conflictCount").textContent = baseRows.filter((r) => r.active_commands.length > 0).length;
+      document.getElementById("centralCount").textContent = baseRows.filter((r) => r.current_order_count > 0).length;
       document.getElementById("restoredCount").textContent = baseRows.filter((r) => r.state === "restored").length;
       document.querySelectorAll("[data-summary-filter]").forEach((card) => {
         card.classList.toggle("active", card.dataset.summaryFilter === summaryFilter);
@@ -1149,6 +1595,16 @@
         groups.get(eaId).tickets.push(ticket);
       }
       return [...groups.values()];
+    }
+    function centralOrderGroupsFromRows(targetRows, kind) {
+      const groups = [];
+      for (const row of targetRows) {
+        if (!canTradeRow(row)) continue;
+        const orders = kind === "position" ? (row.positions || []) : (row.pending_orders || []);
+        const tickets = orders.map((order) => order.ticket).filter(Boolean);
+        if (tickets.length) groups.push({ row, tickets });
+      }
+      return groups;
     }
     function pruneOrderSelections() {
       const positionKeys = new Set();
@@ -1188,7 +1644,7 @@
       const list = visibleRows();
       updateSummary(baseList, list);
       if (!list.length) {
-        grid.innerHTML = `<div class="empty">${summaryFilter !== "all" ? `没有匹配“${escapeHtml(summaryFilterLabel())}”的 EA。` : (hasUrlFilter() ? "没有匹配当前全局状态筛选的 EA。" : "没有匹配的人工建仓 / 挂单建仓 EA。")}</div>`;
+        grid.innerHTML = `<div class="empty">${summaryFilter !== "all" ? `没有匹配“${escapeHtml(summaryFilterLabel())}”的 EA。` : (hasUrlFilter() ? "没有匹配当前全局状态筛选的 EA。" : "没有在线或人工相关 EA。")}</div>`;
         updateSelectionUi();
         return;
       }
@@ -1218,21 +1674,26 @@
               <dt>订单号</dt><dd title="${escapeHtml([...ticketsFromPositions(row.positions), ...ticketsFromOrders(row.pending_orders)].join(", ") || row.ticket || "")}">${escapeHtml(row.ticket || "-")}</dd>
               <dt>归属分配</dt><dd title="${escapeHtml(assignmentTextForRow(row))}">${escapeHtml(assignmentTextForRow(row))}</dd>
               <dt>净值 / 浮盈亏</dt><dd>${fmtNum(row.equity)} / ${fmtNum(row.snapshot_profit)}</dd>
-              <dt>持仓 / 挂单</dt><dd>${escapeHtml(row.positions_count ?? 0)} / ${escapeHtml(row.pending_orders_count ?? 0)}</dd>
+              <dt>总持仓 / 总挂单</dt><dd>${escapeHtml(row.positions_count ?? 0)} / ${escapeHtml(row.pending_orders_count ?? 0)}</dd>
+              <dt>人工持仓 / 人工挂单</dt><dd>${escapeHtml(row.central_positions_count ?? 0)} / ${escapeHtml(row.central_pending_orders_count ?? 0)}</dd>
+              <dt>策略订单</dt><dd>${escapeHtml(strategyOrderCount(row))} 条</dd>
               <dt>人工命令</dt><dd>${row.manual_command ? `#${escapeHtml(row.manual_command.id)} · ${escapeHtml(row.manual_command.status)}` : "无"}</dd>
               <dt>建仓时间</dt><dd>${row.manual_command ? fmtDate(row.manual_command.created_at) : "-"}</dd>
               <dt>最新命令</dt><dd>${row.latest_command && row.latest_command.command_type ? `${escapeHtml(commandText(row.latest_command.command_type))} · ${escapeHtml(row.latest_command.status)}` : "-"}</dd>
               <dt>未完成命令</dt><dd>${escapeHtml(row.active_commands.length)}</dd>
               <dt>最后心跳</dt><dd>${fmtDate(row.last_seen_at)}</dd>
             </dl>
+            ${renderCredibilityPanel(row)}
+            ${renderCommandFlow(row)}
             <section class="order-section">
-              <h3><span>当前持仓</span><span class="meta">${escapeHtml((row.positions || []).length)} 条</span></h3>
+              <h3><span>${hasUrlFilter() ? "当前持仓" : "中央人工持仓"}</span><span class="meta">${escapeHtml((row.positions || []).length)} 条</span></h3>
               ${renderPositions(row)}
             </section>
             <section class="order-section">
-              <h3><span>当前挂单</span><span class="meta">${escapeHtml((row.pending_orders || []).length)} 条</span></h3>
+              <h3><span>${hasUrlFilter() ? "当前挂单" : "中央人工挂单"}</span><span class="meta">${escapeHtml((row.pending_orders || []).length)} 条</span></h3>
               ${renderPendingOrders(row)}
             </section>
+            ${renderStrategyReadonly(row)}
           </article>`;
       }).join("");
       updateSelectionUi();
@@ -1282,6 +1743,37 @@
       if (Number.isFinite(ask) && ask > 0) return ask;
       if (Number.isFinite(bid) && bid > 0) return bid;
       return null;
+    }
+    function setActiveTaskOperation(operation) {
+      activeTaskOperation = operation;
+      if (operation !== "close_central_positions" && operation !== "cancel_central_orders") {
+        bulkCommandTypeEl.value = operation;
+      }
+      document.querySelectorAll("[data-task-op]").forEach((button) => {
+        button.classList.toggle("active-task", button.dataset.taskOp === operation);
+      });
+      const isOrderBatch = operation === "close_central_positions" || operation === "cancel_central_orders";
+      sendBulkBtn.textContent = isOrderBatch
+        ? (operation === "close_central_positions" ? "预览并平中央人工订单" : "预览并取消中央人工挂单")
+        : `下一步：预览并确认${commandText(operation)}`;
+      sendBulkBtn.classList.toggle("danger", isRiskyOperation(operation) || isOrderBatch);
+      taskHintEl.textContent = parameterTaskOperations.has(operation)
+        ? `已选择“${commandText(operation)}”。请填写下面参数，再点“${sendBulkBtn.textContent}”。`
+        : `已选择“${commandText(operation)}”。点击任务按钮会直接进入确认预览；也可以点下方预览按钮。`;
+      updateOperationFields();
+    }
+    async function runTaskOperation(operation) {
+      setActiveTaskOperation(operation);
+      if (parameterTaskOperations.has(operation)) {
+        showMsg(`已选择“${commandText(operation)}”，请填写参数后点击预览确认。`, "warn");
+        return;
+      }
+      if (!selectedRows().length) {
+        showOperationMsg(`已选择“${commandText(operation)}”。请先在左侧勾选 EA，再点击此按钮。`, "err");
+        return;
+      }
+      showOperationMsg(`已选择“${commandText(operation)}”，正在打开确认预览...`, "warn");
+      await sendCommandForRows(selectedRows(), operation);
     }
     function primaryReferenceRow() {
       return selectedReferenceRows().find((row) => rowReferencePrice(row) !== null) || null;
@@ -1338,7 +1830,7 @@
       pendingTypeHintEl.textContent = `自动判断：${orderTypeText(inferred)}；距离当前参考价 ${fmtNum(distance)}`;
     }
     function updateOperationFields() {
-      const op = bulkCommandTypeEl.value;
+      const op = activeTaskOperation;
       document.querySelectorAll("[data-op-fields]").forEach((el) => {
         const ops = String(el.dataset.opFields || "").split(/\s+/);
         el.classList.toggle("show", ops.includes(op));
@@ -1440,7 +1932,7 @@
       return payload;
     }
     function isRiskyOperation(operation) {
-      return ["close_all", "close_symbol", "close_ticket", "cancel_order", "open_market", "open_pending"].includes(operation);
+      return ["close_all", "close_symbol", "close_ticket", "cancel_order", "open_market", "open_pending", "close_central_positions", "cancel_central_orders"].includes(operation);
     }
     function shouldShowParameterSummary(operation) {
       return ["close_all", "close_symbol", "close_ticket", "cancel_order", "open_market", "open_pending", "update_params"].includes(operation);
@@ -1483,6 +1975,18 @@
       warnings.push("请在本弹窗底部点击“确认发送”，命令才会真正写入后台并由 EA 领取。");
       if (isRiskyOperation(operation)) {
         warnings.push("该操作会影响持仓、开仓或挂单，请确认目标 EA 和关键参数。");
+      }
+      if (operation === "close_all") {
+        const strategyTotal = targetRows.reduce((sum, row) => sum + strategyOrderCount(row), 0);
+        const centralTotal = targetRows.reduce((sum, row) => sum + Number(row.current_order_count || 0), 0);
+        warnings.push(`高风险：本操作会全平所选 EA 的所有订单，包含中央人工订单 ${centralTotal} 条、策略订单 ${strategyTotal} 条。`);
+        warnings.push("如果只想处理中央系统人工订单，请取消并使用“平中央人工订单”按钮。");
+      }
+      if (operation === "close_central_positions") {
+        warnings.push("本操作只会按已勾选的中央人工持仓 ticket 平仓，不处理策略订单。");
+      }
+      if (operation === "cancel_central_orders") {
+        warnings.push("本操作只会按已勾选的中央人工挂单 ticket 撤单，不处理策略挂单。");
       }
       if (offlineRows.length) {
         warnings.push(`离线 EA 提示：${offlineRows.length} 个 EA 当前离线，命令会等待 EA 恢复连接后处理。`);
@@ -1536,6 +2040,14 @@
       });
     }
     async function sendCommandForRows(targetRows, operation) {
+      if (operation === "close_central_positions") {
+        await sendCentralOrderBatchFromRows(targetRows, "position");
+        return;
+      }
+      if (operation === "cancel_central_orders") {
+        await sendCentralOrderBatchFromRows(targetRows, "pending");
+        return;
+      }
       const reason = (document.getElementById("bulkReason").value || "").trim();
       const requestedBy = (document.getElementById("bulkRequestedBy").value || "").trim() || "manual-trades-ui";
       const commandType = commandTypeForOperation(operation);
@@ -1579,6 +2091,18 @@
         showMsg(e.message || String(e), "err");
       }
     }
+    async function sendCentralOrderBatchFromRows(targetRows, kind) {
+      if (!targetRows.length) {
+        showMsg("请先选择至少一个 EA。", "err");
+        return;
+      }
+      const groups = centralOrderGroupsFromRows(targetRows, kind);
+      if (!groups.length) {
+        showMsg(kind === "position" ? "所选 EA 没有可平仓的中央人工持仓。" : "所选 EA 没有可取消的中央人工挂单。", "err");
+        return;
+      }
+      await sendOrderGroups(groups, kind, kind === "position" ? "close_central_positions" : "cancel_central_orders");
+    }
     async function sendQuickTicketCommand(eaId, operation, ticket) {
       if (!ticket) {
         showMsg("缺少 ticket，无法执行快捷操作。", "err");
@@ -1615,6 +2139,9 @@
     }
     async function sendSelectedOrderBatch(kind) {
       const groups = selectedOrderGroups(kind);
+      await sendOrderGroups(groups, kind, kind === "position" ? "close_ticket" : "cancel_order");
+    }
+    async function sendOrderGroups(groups, kind, previewOperation) {
       const operation = kind === "position" ? "close_ticket" : "cancel_order";
       if (!groups.length) {
         showMsg(kind === "position" ? "请先勾选要平仓的持仓订单。" : "请先勾选要取消的挂单。", "err");
@@ -1631,7 +2158,7 @@
         },
         requested_by: requestedBy,
       }));
-      const ok = await openConfirmDialog(buildConfirmPreview(groups.map((group) => group.row), commands, operation, requestedBy));
+      const ok = await openConfirmDialog(buildConfirmPreview(groups.map((group) => group.row), commands, previewOperation || operation, requestedBy));
       if (!ok) return;
       try {
         const results = await Promise.allSettled(commands.map((command) => api("/api/admin/commands", {
@@ -1694,9 +2221,13 @@
       selectedEaIds.clear();
       render();
     });
-    bulkCommandTypeEl.addEventListener("change", updateOperationFields);
-    sendBulkBtn.addEventListener("click", () => sendCommandForRows(selectedRows(), bulkCommandTypeEl.value));
+    document.querySelectorAll("[data-task-op]").forEach((button) => {
+      button.addEventListener("click", () => runTaskOperation(button.dataset.taskOp || "resume_trading"));
+    });
+    bulkCommandTypeEl.addEventListener("change", () => setActiveTaskOperation(bulkCommandTypeEl.value));
+    sendBulkBtn.addEventListener("click", () => sendCommandForRows(selectedRows(), activeTaskOperation));
     removeManualBtn.addEventListener("click", () => sendCommandForRows(selectedRows(), "manual_release"));
+    closeAllRiskBtn.addEventListener("click", () => sendCommandForRows(selectedRows(), "close_all"));
     closeSelectedPositionsBtn.addEventListener("click", () => sendSelectedOrderBatch("position"));
     cancelSelectedOrdersBtn.addEventListener("click", () => sendSelectedOrderBatch("pending"));
     clearOrderSelectionBtn.addEventListener("click", () => {
@@ -1750,7 +2281,7 @@
     });
     const saved = localStorage.getItem("ea-admin-token");
     if (saved) adminTokenEl.value = saved;
-    updateOperationFields();
+    setActiveTaskOperation(activeTaskOperation);
     schedule();
     load();
   </script>

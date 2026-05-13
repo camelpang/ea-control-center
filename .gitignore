@@ -18,5 +18,7 @@ htmlcov/
 .vscode/
 *.ex4
 *.ex5
+ea/mt5/runing-current-ea*.mq5
+ea\mt5\runing-current-ea*.mq5
 docs/chat-record-*.md
 backups/

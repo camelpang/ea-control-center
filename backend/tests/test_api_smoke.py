@@ -987,6 +987,10 @@ def test_dashboard_html_route(client: TestClient) -> None:
     assert "confirmModal" in r.text
     assert "openConfirmDialog" in r.text
     assert "formatPayloadSummary" in r.text
+    assert "EA 状态可信度" in r.text
+    assert "credibilitySummary" in r.text
+    assert "命令回执" in r.text
+    assert "EA版本" in r.text
     assert "window.confirm" not in r.text
     assert 'id="bulkSymbol" class="input" type="text" value="XAUUSD"' in r.text
 
@@ -1222,9 +1226,43 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "data-summary-filter" in r.text
     assert "summaryFilterBanner" in r.text
     assert "summaryFilterLabel" in r.text
-    assert "允许人工 EA" in r.text
+    assert "工作台 EA" in r.text
+    assert "允许操作 EA" in r.text
+    assert "全部在线 / 人工相关 EA" in r.text
+    assert "日常操作" in r.text
+    assert "平中央人工持仓" in r.text
+    assert "取消中央人工挂单" in r.text
+    assert "人工开仓" in r.text
+    assert "高级操作（按品种、ticket、参数）" in r.text
+    assert "精细选择订单" in r.text
+    assert "风险处置：全平所有订单" in r.text
+    assert "全平所选 EA 所有订单（含策略）" in r.text
+    assert "查看策略订单明细（只读" in r.text
+    assert "setActiveTaskOperation" in r.text
+    assert "runTaskOperation" in r.text
+    assert "taskHint" in r.text
+    assert "showOperationMsg" in r.text
+    assert "close_central_positions" in r.text
+    assert "cancel_central_orders" in r.text
+    assert "centralOrderGroupsFromRows" in r.text
+    assert "sendCentralOrderBatchFromRows" in r.text
+    assert "shouldShowInDefaultWorkbench" in r.text
+    assert "策略订单只读" in r.text
+    assert "中央人工订单" in r.text
+    assert "策略订单" in r.text
     assert "冲突命令" in r.text
     assert "activeCommandsFor" in r.text
+    assert "最近命令闭环" in r.text
+    assert "commandStatusText" in r.text
+    assert "renderCommandFlow" in r.text
+    assert "EA 状态可信度" in r.text
+    assert "credibilitySummary" in r.text
+    assert "命令回执" in r.text
+    assert "EA版本" in r.text
+    assert "EA已领取" in r.text
+    assert "执行中" in r.text
+    assert "执行成功" in r.text
+    assert "执行失败" in r.text
     assert "buildConfirmPreview" in r.text
     assert "confirmModal" in r.text
     assert "apiErrorMessage" in r.text
@@ -1267,7 +1305,7 @@ def test_manual_trades_html_route(client: TestClient) -> None:
     assert "reference_price" in r.text
     assert "已无当前订单" in r.text
     assert "current_order_count" in r.text
-    assert "持仓中" in r.text
+    assert "人工持仓中" in r.text
     assert 'id="opSymbol" class="input" type="text" value="XAUUSD"' in r.text
     assert "openConfirmDialog" in r.text
     assert "shouldShowParameterSummary" in r.text

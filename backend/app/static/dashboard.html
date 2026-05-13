@@ -216,6 +216,53 @@
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
+    .credibility-panel {
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px solid rgba(30, 58, 95, 0.72);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.36);
+    }
+    .credibility-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .credibility-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .credibility-item {
+      border: 1px solid rgba(30, 58, 95, 0.68);
+      border-radius: 10px;
+      padding: 7px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .credibility-item strong {
+      display: block;
+      margin-bottom: 3px;
+      color: #cbd5e1;
+    }
+    .credibility-item.ok {
+      border-color: rgba(34, 197, 94, 0.42);
+      background: rgba(34, 197, 94, 0.08);
+    }
+    .credibility-item.watch {
+      border-color: rgba(234, 179, 8, 0.42);
+      background: rgba(234, 179, 8, 0.08);
+      color: #fde68a;
+    }
+    .credibility-item.bad {
+      border-color: rgba(239, 68, 68, 0.5);
+      background: rgba(239, 68, 68, 0.1);
+      color: #fecaca;
+    }
     .profit-pos { color: var(--ok); }
     .profit-neg { color: var(--bad); }
     .empty-state {
@@ -567,6 +614,84 @@
         close_symbol: "按品种平仓", close_ticket: "按订单平仓", cancel_order: "取消挂单", manual_manage: "加入人工管理", manual_release: "移出人工管理页面", open_order: "手动开单", update_params: "更新参数",
       };
       return m[t] || t || "—";
+    }
+    function commandStatusText(status) {
+      const m = {
+        pending: "已发送",
+        received: "EA已领取",
+        executing: "执行中",
+        success: "执行成功",
+        failed: "执行失败",
+        timeout: "执行超时",
+        cancelled: "已取消",
+      };
+      return m[status] || status || "暂无命令";
+    }
+    function ageSeconds(value) {
+      if (!value) return null;
+      const ts = new Date(value).getTime();
+      if (!Number.isFinite(ts)) return null;
+      return Math.max(0, Math.round((Date.now() - ts) / 1000));
+    }
+    function ageText(value) {
+      const seconds = ageSeconds(value);
+      if (seconds === null) return "无数据";
+      if (seconds < 60) return `${seconds}s 前`;
+      const minutes = Math.round(seconds / 60);
+      if (minutes < 60) return `${minutes}m 前`;
+      const hours = Math.round(minutes / 60);
+      return `${hours}h 前`;
+    }
+    function statusByAge(value, warnSec, badSec) {
+      const seconds = ageSeconds(value);
+      if (seconds === null) return "bad";
+      if (seconds > badSec) return "bad";
+      if (seconds > warnSec) return "watch";
+      return "ok";
+    }
+    function commandReceiptStatus(ea) {
+      const status = String(ea.latest_command_status || "");
+      if (!status) return { level: "watch", text: "暂无命令回执" };
+      if (["failed", "timeout", "cancelled"].includes(status)) return { level: "bad", text: commandStatusText(status) };
+      if (["pending", "received", "executing"].includes(status)) return { level: "watch", text: commandStatusText(status) };
+      return { level: "ok", text: commandStatusText(status) };
+    }
+    function credibilitySummary(ea) {
+      const heartbeat = statusByAge(ea.last_seen_at, 60, 180);
+      const snapshot = statusByAge(ea.latest_snapshot_at, 120, 300);
+      const receipt = commandReceiptStatus(ea);
+      const version = ea.version ? { level: "ok", text: ea.version } : { level: "watch", text: "未上报版本" };
+      const levels = [heartbeat, snapshot, receipt.level, version.level];
+      const level = levels.includes("bad") ? "bad" : (levels.includes("watch") ? "watch" : "ok");
+      const text = level === "ok" ? "可信" : (level === "watch" ? "需关注" : "异常");
+      return {
+        text,
+        items: [
+          { label: "心跳", level: heartbeat, text: ageText(ea.last_seen_at) },
+          { label: "快照", level: snapshot, text: ageText(ea.latest_snapshot_at) },
+          { label: "命令回执", level: receipt.level, text: receipt.text },
+          { label: "EA版本", level: version.level, text: version.text },
+        ],
+      };
+    }
+    function renderCredibilityPanel(ea) {
+      const summary = credibilitySummary(ea);
+      return `
+        <section class="credibility-panel">
+          <div class="credibility-header">
+            <span>EA 状态可信度</span>
+            <span>${escapeHtml(summary.text)}</span>
+          </div>
+          <div class="credibility-grid">
+            ${summary.items.map((item) => `
+              <div class="credibility-item ${escapeHtml(item.level)}">
+                <strong>${escapeHtml(item.label)}</strong>
+                <span>${escapeHtml(item.text)}</span>
+              </div>
+            `).join("")}
+          </div>
+        </section>
+      `;
     }
     function riskBadgeClass(level) {
       const k = String(level || "").toLowerCase();
@@ -921,6 +1046,7 @@
               <dt>最近命令</dt>
               <dd>${escapeHtml(commandTypeText(ea.latest_command_type))} · ${escapeHtml(statusText(ea.latest_command_status))}</dd>
             </dl>
+            ${renderCredibilityPanel(ea)}
           </article>`;
       }).join("");
       updateSelectionUi();
